@@ -1,0 +1,1765 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>ブロッククラフト</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body {
+    width:100%; height:100%; overflow:hidden; background:#000;
+    position:fixed; overscroll-behavior:none;
+    -webkit-user-select:none; user-select:none;
+    -webkit-touch-callout:none;
+    -webkit-tap-highlight-color:transparent;
+    touch-action:none;
+    font-family: -apple-system, "Hiragino Kaku Gothic ProN", "Yu Gothic", Meiryo, sans-serif;
+    color:#fff;
+  }
+  #gl { display:block; width:100%; height:100%; touch-action:none; }
+  #hud { position:fixed; top:0; right:0; bottom:0; left:0; pointer-events:none; }
+  #hud > * { pointer-events:auto; }
+
+  #crosshair {
+    position:absolute; left:50%; top:50%; width:26px; height:26px;
+    margin:-13px 0 0 -13px; pointer-events:none;
+  }
+  #crosshair:before, #crosshair:after {
+    content:""; position:absolute; background:rgba(255,255,255,0.85);
+    box-shadow:0 0 2px rgba(0,0,0,0.9);
+  }
+  #crosshair:before { left:12px; top:0; width:2px; height:26px; }
+  #crosshair:after  { top:12px; left:0; height:2px; width:26px; }
+
+  .panel {
+    background:rgba(0,0,0,0.45); border-radius:8px; padding:8px 10px;
+    font-size:12px; line-height:1.5; backdrop-filter:blur(2px);
+  }
+  #info { position:absolute; left:8px; top:calc(8px + env(safe-area-inset-top)); pointer-events:none; }
+  #info b { color:#8fd0ff; font-weight:600; }
+
+  #controls {
+    position:absolute; right:8px; top:calc(8px + env(safe-area-inset-top));
+    display:flex; flex-direction:column; gap:6px; align-items:flex-end;
+  }
+  #rdRow { display:flex; gap:4px; align-items:center; }
+  .rdbtn {
+    min-width:26px; height:26px; border:1px solid rgba(255,255,255,0.4);
+    background:rgba(255,255,255,0.12); color:#fff; border-radius:5px;
+    font-size:12px; cursor:pointer;
+  }
+  .rdbtn.on { background:#3aa0ff; border-color:#8fd0ff; }
+  #muteBtn, #resetBtn {
+    background:rgba(255,255,255,0.12); color:#fff; border:1px solid rgba(255,255,255,0.4);
+    border-radius:5px; font-size:12px; padding:4px 8px; cursor:pointer;
+  }
+
+  #hotbar {
+    position:absolute; left:50%; transform:translateX(-50%);
+    bottom:calc(8px + env(safe-area-inset-bottom));
+    display:flex; gap:3px; padding:5px; border-radius:10px;
+    background:rgba(0,0,0,0.4); max-width:96vw;
+  }
+  .slot {
+    width:clamp(30px, 9vw, 44px); height:clamp(30px, 9vw, 44px);
+    border-radius:8px; border:2px solid rgba(255,255,255,0.25);
+    display:flex; align-items:flex-end; justify-content:center; flex:0 0 auto;
+    position:relative; cursor:pointer; overflow:hidden;
+  }
+  .slot .num { position:absolute; left:3px; top:1px; font-size:10px; opacity:0.8; text-shadow:0 1px 2px #000; }
+  .slot .nm  { font-size:9px; padding-bottom:2px; text-shadow:0 1px 2px #000; }
+  .slot.sel { border-color:#ffe14d; box-shadow:0 0 8px #ffe14d inset, 0 0 6px #ffe14d; }
+
+  #stickBase {
+    position:absolute; left:calc(18px + env(safe-area-inset-left));
+    bottom:calc(74px + env(safe-area-inset-bottom));
+    width:132px; height:132px; border-radius:50%;
+    background:rgba(255,255,255,0.08); border:2px solid rgba(255,255,255,0.28);
+    display:none;
+  }
+  #stickKnob {
+    position:absolute; left:50%; top:50%; width:56px; height:56px; margin:-28px 0 0 -28px;
+    border-radius:50%; background:rgba(255,255,255,0.35); border:2px solid rgba(255,255,255,0.6);
+  }
+  #touchBtns { position:absolute; right:calc(14px + env(safe-area-inset-right)); bottom:calc(76px + env(safe-area-inset-bottom)); display:none; flex-direction:column; gap:8px; align-items:flex-end; }
+  .tbtn {
+    width:74px; height:52px; border-radius:10px; border:2px solid rgba(255,255,255,0.5);
+    background:rgba(255,255,255,0.15); color:#fff; font-size:14px; font-weight:600;
+    cursor:pointer; touch-action:none;
+  }
+  .tbtn:active { background:rgba(255,255,255,0.4); }
+  #btnJump { background:rgba(60,170,255,0.3); }
+  #btnBreak { background:rgba(255,80,80,0.3); }
+  #btnPlace { background:rgba(80,220,120,0.3); }
+  .touch #stickBase { display:block; }
+  .touch #touchBtns { display:flex; }
+
+  #title {
+    position:fixed; top:0; right:0; bottom:0; left:0; background:rgba(6,14,26,0.86);
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:14px; text-align:center; padding:20px; z-index:10;
+  }
+  #title h1 { font-size:30px; letter-spacing:2px; text-shadow:0 3px 10px #000; }
+  #title .sub { font-size:13px; opacity:0.85; }
+  #startBtn {
+    margin-top:6px; font-size:20px; padding:14px 44px; border-radius:12px; border:none;
+    background:linear-gradient(#5fd06a,#2f9a44); color:#fff; font-weight:700; cursor:pointer;
+    box-shadow:0 5px 0 #1d6b2e, 0 8px 18px rgba(0,0,0,0.5);
+  }
+  #startBtn:active { transform:translateY(2px); box-shadow:0 3px 0 #1d6b2e; }
+  #title .help { font-size:12px; line-height:1.9; opacity:0.9; max-width:440px; text-align:left; }
+  #title .help b { color:#ffe14d; }
+  #err { position:fixed; top:0; right:0; bottom:0; left:0; display:none; align-items:center; justify-content:center;
+         background:#200; color:#ffb3b3; font-size:16px; text-align:center; padding:30px; z-index:20; }
+  #overlayWater { position:fixed; top:0; right:0; bottom:0; left:0; pointer-events:none; background:rgba(20,70,150,0.35); display:none; }
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div id="overlayWater"></div>
+<div id="hud">
+  <div id="crosshair"></div>
+  <div id="info" class="panel"></div>
+  <div id="controls">
+    <div id="rdRow" class="panel">
+      <span>描画距離</span>
+      <button class="rdbtn" data-rd="2">2</button>
+      <button class="rdbtn" data-rd="3">3</button>
+      <button class="rdbtn" data-rd="4">4</button>
+      <button class="rdbtn" data-rd="5">5</button>
+      <button class="rdbtn" data-rd="6">6</button>
+    </div>
+    <button id="muteBtn">♪ 音ON</button>
+    <button id="resetBtn">リスポーン</button>
+  </div>
+  <div id="stickBase"><div id="stickKnob"></div></div>
+  <div id="touchBtns">
+    <button class="tbtn" id="btnJump">ジャンプ</button>
+    <button class="tbtn" id="btnBreak">壊す</button>
+    <button class="tbtn" id="btnPlace">置く</button>
+  </div>
+  <div id="hotbar"></div>
+</div>
+
+<div id="title">
+  <h1>ブロッククラフト</h1>
+  <div class="sub">素の WebGL でつくる マインクラフト風 3D 世界</div>
+  <button id="startBtn">スタート</button>
+  <div class="help">
+    <b>PC</b>: WASD/矢印=移動, Space=ジャンプ, マウス=視点(クリックで固定),<br>
+    左クリック=壊す, 右クリック=置く, 1〜9=素材選択<br>
+    <b>スマホ</b>: 左下スティック=移動, 右側ドラッグ=視点,<br>
+    「ジャンプ」「壊す」「置く」ボタン, ホットバーで素材選択,<br>
+    右側を長押し=壊す, 中央の照準が狙うブロックを操作します。
+  </div>
+</div>
+
+<div id="err"></div>
+
+<script>
+"use strict";
+/* =====================================================================
+   ブロッククラフト — 単一ファイル / 素の WebGL1 / 外部依存なし
+   ===================================================================== */
+(function () {
+
+// ---------------------------------------------------------------------
+// 定数
+// ---------------------------------------------------------------------
+var CHUNK_SIZE = 16;      // チャンクの水平サイズ
+var CHUNK_HEIGHT = 56;    // チャンクの高さ
+var SEA_LEVEL = 18;       // 海面の高さ(これ以下を水で満たす)
+var SEED = 1337;          // 地形のシード
+var REACH = 5.0;          // ブロック操作の最大到達距離
+var CYCLE_SECONDS = 120;  // 昼夜サイクル1周の秒数
+var EYE_HEIGHT = 1.62;    // 目の高さ
+var PLAYER_HW = 0.3;      // プレイヤー半径
+var PLAYER_HEIGHT = 1.8;  // プレイヤーの高さ
+
+// ブロックID
+var AIR = 0, GRASS = 1, DIRT = 2, STONE = 3, SAND = 4, WATER = 5,
+    WOOD = 6, LEAVES = 7, PLANKS = 8, COBBLE = 9;
+
+var BLOCKS = {
+  air: AIR, grass: GRASS, dirt: DIRT, stone: STONE, sand: SAND,
+  water: WATER, wood: WOOD, leaves: LEAVES, planks: PLANKS, cobble: COBBLE
+};
+
+var BLOCK_NAMES = ["空気","草","土","石","砂","水","木","葉","板材","丸石"];
+var BLOCK_UI = {
+  1:"#5aa03c", 2:"#8a6244", 3:"#8a8a8c", 4:"#dcd0a0", 5:"#3568be",
+  6:"#96703f", 7:"#357030", 8:"#b08454", 9:"#7c7c80"
+};
+
+// ---------------------------------------------------------------------
+// DOM
+// ---------------------------------------------------------------------
+var canvas = document.getElementById("gl");
+var errBox = document.getElementById("err");
+var titleEl = document.getElementById("title");
+var infoEl = document.getElementById("info");
+var hotbarEl = document.getElementById("hotbar");
+var stickBase = document.getElementById("stickBase");
+var stickKnob = document.getElementById("stickKnob");
+var overlayWater = document.getElementById("overlayWater");
+var muteBtn = document.getElementById("muteBtn");
+var resetBtn = document.getElementById("resetBtn");
+var startBtn = document.getElementById("startBtn");
+
+function fatal(msg) {
+  errBox.style.display = "flex";
+  errBox.textContent = msg;
+}
+
+// ---------------------------------------------------------------------
+// 乱数・ノイズ (シード付き / 決定的)
+// ---------------------------------------------------------------------
+function hash2i(x, z, s) {
+  var h = Math.imul(x | 0, 374761393) + Math.imul(z | 0, 668265263) + Math.imul(s | 0, 1274126177);
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  h ^= h >>> 16;
+  return (h >>> 0) / 4294967296;
+}
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    var t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function noise2(x, z, s) {
+  var xi = Math.floor(x), zi = Math.floor(z);
+  var xf = x - xi, zf = z - zi;
+  var u = xf * xf * (3 - 2 * xf), v = zf * zf * (3 - 2 * zf);
+  var a = hash2i(xi, zi, s), b = hash2i(xi + 1, zi, s);
+  var c = hash2i(xi, zi + 1, s), d = hash2i(xi + 1, zi + 1, s);
+  var top = a + (b - a) * u, bot = c + (d - c) * u;
+  return top + (bot - top) * v;
+}
+function fbm(x, z, oct) {
+  var amp = 1, freq = 1, sum = 0, norm = 0;
+  for (var i = 0; i < oct; i++) {
+    sum += amp * noise2(x * freq, z * freq, SEED + i * 17);
+    norm += amp; amp *= 0.5; freq *= 2;
+  }
+  return sum / norm;
+}
+function clamp01(v) { return v < 0 ? 0 : v > 1 ? 1 : v; }
+function smoothstep(a, b, x) { var t = clamp01((x - a) / (b - a)); return t * t * (3 - 2 * t); }
+
+// 地形の高さ(浮動小数)
+function heightAt(x, z) {
+  var c = fbm(x * 0.0045, z * 0.0045, 3);
+  var d = fbm(x * 0.02, z * 0.02, 4);
+  return 4 + c * 30 + d * 6;
+}
+function surfaceHeight(x, z) { return Math.floor(heightAt(x, z)); }
+var TREE_CHANCE = 0.014;
+function treeAt(x, z) {
+  if (hash2i(x, z, SEED + 911) >= TREE_CHANCE) return 0;
+  if (surfaceHeight(x, z) <= SEA_LEVEL + 1) return 0;
+  return 4 + Math.floor(hash2i(x, z, SEED + 912) * 3);
+}
+
+// ---------------------------------------------------------------------
+// ブロックの性質
+// ---------------------------------------------------------------------
+function isOpaque(id) { return id !== AIR && id !== WATER; }
+function isSolid(id) { return id !== AIR && id !== WATER; }     // 衝突判定
+function isTargetable(id) { return id !== AIR && id !== WATER; } // レイキャスト
+
+// ---------------------------------------------------------------------
+// テクスチャアトラスを canvas で手続き生成(画像ファイル不使用)
+//   16x16px のタイルを 4x4 並べた 64x64 のアトラス
+// ---------------------------------------------------------------------
+var TILE = 16, ATLAS_N = 4, ATLAS_SIZE = TILE * ATLAS_N;
+// タイル番号
+var T_GRASS_TOP = 0, T_GRASS_SIDE = 1, T_DIRT = 2, T_STONE = 3,
+    T_SAND = 4, T_WATER = 5, T_WOOD_SIDE = 6, T_WOOD_TOP = 7,
+    T_LEAVES = 8, T_PLANKS = 9, T_COBBLE = 10;
+
+function clampi(v) { return v < 0 ? 0 : v > 255 ? 255 : v | 0; }
+function jitter(x, y, t, amt) { return (hash2i(x + t * 131, y, t) - 0.5) * amt; }
+
+function paintTile(d, size, tileIdx, fn) {
+  var tx = (tileIdx % ATLAS_N) * TILE, ty = Math.floor(tileIdx / ATLAS_N) * TILE;
+  for (var y = 0; y < TILE; y++) {
+    for (var x = 0; x < TILE; x++) {
+      var c = fn(x, y);
+      var i = ((ty + y) * size + (tx + x)) * 4;
+      d[i] = clampi(c[0]); d[i + 1] = clampi(c[1]); d[i + 2] = clampi(c[2]);
+      d[i + 3] = c.length > 3 ? c[3] : 255;
+    }
+  }
+}
+
+function buildAtlas() {
+  var cv = document.createElement("canvas");
+  cv.width = cv.height = ATLAS_SIZE;
+  var ctx = cv.getContext("2d");
+  var img = ctx.createImageData(ATLAS_SIZE, ATLAS_SIZE);
+  var d = img.data;
+
+  function dirt(cx, cy, t) { var j = jitter(cx, cy, t, 34); return [132 + j, 96 + j * 0.9, 66 + j * 0.7]; }
+  function green(cx, cy, t) { var j = jitter(cx, cy, t, 40); return [84 + j * 0.7, 150 + j, 62 + j * 0.6]; }
+
+  paintTile(d, ATLAS_SIZE, T_GRASS_TOP, function (x, y) {
+    var j = jitter(x, y, 11, 42);
+    return [82 + j * 0.7, 150 + j, 60 + j * 0.6];
+  });
+  paintTile(d, ATLAS_SIZE, T_GRASS_SIDE, function (x, y) {
+    var edge = 3 + Math.floor(hash2i(x, 7, 13) * 3);
+    if (y < edge) { var j = jitter(x, y, 12, 36); return [80 + j * 0.7, 146 + j, 60 + j * 0.6]; }
+    return dirt(x, y, 14);
+  });
+  paintTile(d, ATLAS_SIZE, T_DIRT, function (x, y) { return dirt(x, y, 14); });
+  paintTile(d, ATLAS_SIZE, T_STONE, function (x, y) {
+    var j = jitter(x, y, 15, 30);
+    var v = 128 + j;
+    if (hash2i(x, y, 16) < 0.06) v -= 26;
+    return [v, v, v + 2];
+  });
+  paintTile(d, ATLAS_SIZE, T_SAND, function (x, y) {
+    var j = jitter(x, y, 17, 26);
+    return [220 + j, 208 + j, 158 + j * 0.8];
+  });
+  paintTile(d, ATLAS_SIZE, T_WATER, function (x, y) {
+    var j = jitter(x, y, 18, 24);
+    return [54 + j * 0.6, 108 + j, 196 + j, 255];
+  });
+  paintTile(d, ATLAS_SIZE, T_WOOD_SIDE, function (x, y) {
+    var j = jitter(x, y, 19, 22);
+    var band = (x % 7 === 0 || (x % 5 === 2)) ? -22 : 0;
+    return [148 + j + band, 108 + j + band, 66 + j + band * 0.7];
+  });
+  paintTile(d, ATLAS_SIZE, T_WOOD_TOP, function (x, y) {
+    var dx = x - 7.5, dy = y - 7.5, r = Math.sqrt(dx * dx + dy * dy);
+    var ring = ((r | 0) % 3 === 0) ? -18 : 8;
+    var j = jitter(x, y, 20, 18);
+    return [160 + j + ring, 122 + j + ring, 78 + j + ring * 0.7];
+  });
+  paintTile(d, ATLAS_SIZE, T_LEAVES, function (x, y) {
+    var h = hash2i(x, y, 21);
+    var j = jitter(x, y, 22, 46);
+    var v = 108 + j;
+    if (h < 0.14) v -= 40;
+    else if (h > 0.9) v += 30;
+    return [44 + j * 0.6, v, 40 + j * 0.5];
+  });
+  paintTile(d, ATLAS_SIZE, T_PLANKS, function (x, y) {
+    var j = jitter(x, y, 23, 22);
+    var line = (y % 8 === 0) ? -30 : 0;
+    var seam = ((x + (Math.floor(y / 8) % 2) * 8) % 16 === 0) ? -22 : 0;
+    return [172 + j + line + seam, 132 + j + line + seam, 84 + j + line + seam];
+  });
+  paintTile(d, ATLAS_SIZE, T_COBBLE, function (x, y) {
+    var bx = Math.floor(x / 4), by = Math.floor(y / 4);
+    var blob = hash2i(bx, by, 24);
+    var base = 96 + blob * 66;
+    var j = jitter(x, y, 25, 22);
+    var v = base + j;
+    if ((x % 4 === 0) || (y % 4 === 0)) v -= 26;
+    return [v, v, v + 2];
+  });
+
+  ctx.putImageData(img, 0, 0);
+  return cv;
+}
+
+// ブロック・面ごとのタイル番号 (face: 0=+X 1=-X 2=+Y 3=-Y 4=+Z 5=-Z)
+function tileFor(id, face) {
+  switch (id) {
+    case GRASS: return face === 2 ? T_GRASS_TOP : (face === 3 ? T_DIRT : T_GRASS_SIDE);
+    case DIRT: return T_DIRT;
+    case STONE: return T_STONE;
+    case SAND: return T_SAND;
+    case WATER: return T_WATER;
+    case WOOD: return (face === 2 || face === 3) ? T_WOOD_TOP : T_WOOD_SIDE;
+    case LEAVES: return T_LEAVES;
+    case PLANKS: return T_PLANKS;
+    case COBBLE: return T_COBBLE;
+    default: return T_STONE;
+  }
+}
+// タイル内 UV (uvx,uvy は 0..1)。アトラスは y 下向きなので v を反転。
+function tileUV(tile, uvx, uvy) {
+  var du = 1 / ATLAS_N;
+  var tx = tile % ATLAS_N, ty = Math.floor(tile / ATLAS_N);
+  var e = 0.5 / ATLAS_SIZE;
+  return [
+    tx * du + e + uvx * (du - 2 * e),
+    ty * du + e + (1 - uvy) * (du - 2 * e)
+  ];
+}
+
+// ---------------------------------------------------------------------
+// 立方体の面データ (反時計回り = 外側から見て表)
+// ---------------------------------------------------------------------
+var FACES = [
+  { n: [1, 0, 0],  c: [[1,0,1],[1,0,0],[1,1,0],[1,1,1]] }, // +X
+  { n: [-1, 0, 0], c: [[0,0,0],[0,0,1],[0,1,1],[0,1,0]] }, // -X
+  { n: [0, 1, 0],  c: [[0,1,0],[0,1,1],[1,1,1],[1,1,0]] }, // +Y
+  { n: [0, -1, 0], c: [[0,0,0],[1,0,0],[1,0,1],[0,0,1]] }, // -Y
+  { n: [0, 0, 1],  c: [[0,0,1],[1,0,1],[1,1,1],[0,1,1]] }, // +Z
+  { n: [0, 0, -1], c: [[1,0,0],[0,0,0],[0,1,0],[1,1,0]] }  // -Z
+];
+var FACE_UV = [[0, 0], [1, 0], [1, 1], [0, 1]];
+var FACE_SHADE = [0.74, 0.74, 1.0, 0.52, 0.86, 0.86]; // 面ごとの明るさ
+var AO_LEVELS = [0.55, 0.72, 0.86, 1.0];
+
+// ---------------------------------------------------------------------
+// WebGL 初期化
+// ---------------------------------------------------------------------
+var gl = null;
+(function initGL() {
+  var opts = { antialias: false, alpha: false, depth: true, stencil: false, preserveDrawingBuffer: true };
+  try {
+    gl = canvas.getContext("webgl", opts) || canvas.getContext("experimental-webgl", opts);
+  } catch (e) { gl = null; }
+  if (!gl) fatal("この端末では WebGL を利用できません。ブラウザの設定を確認してください。");
+})();
+
+var uintExt = null;
+if (gl) uintExt = gl.getExtension("OES_element_index_uint");
+
+// ---------------------------------------------------------------------
+// 行列計算 (列優先 / WebGL 用)
+// ---------------------------------------------------------------------
+function mat4Perspective(out, fovy, aspect, near, far) {
+  var f = 1.0 / Math.tan(fovy / 2);
+  out[0] = f / aspect; out[1] = 0; out[2] = 0; out[3] = 0;
+  out[4] = 0; out[5] = f; out[6] = 0; out[7] = 0;
+  out[8] = 0; out[9] = 0; out[10] = (far + near) / (near - far); out[11] = -1;
+  out[12] = 0; out[13] = 0; out[14] = (2 * far * near) / (near - far); out[15] = 0;
+  return out;
+}
+function mat4Multiply(out, a, b) {
+  // out = a * b
+  for (var c = 0; c < 4; c++) {
+    var b0 = b[c * 4], b1 = b[c * 4 + 1], b2 = b[c * 4 + 2], b3 = b[c * 4 + 3];
+    out[c * 4]     = a[0] * b0 + a[4] * b1 + a[8]  * b2 + a[12] * b3;
+    out[c * 4 + 1] = a[1] * b0 + a[5] * b1 + a[9]  * b2 + a[13] * b3;
+    out[c * 4 + 2] = a[2] * b0 + a[6] * b1 + a[10] * b2 + a[14] * b3;
+    out[c * 4 + 3] = a[3] * b0 + a[7] * b1 + a[11] * b2 + a[15] * b3;
+  }
+  return out;
+}
+// カメラの基底からビュー行列を作る
+function mat4View(out, eye, right, up, fwd) {
+  // 行:right / up / -fwd 、その後に -eye 平行移動
+  out[0] = right[0]; out[1] = up[0]; out[2] = -fwd[0]; out[3] = 0;
+  out[4] = right[1]; out[5] = up[1]; out[6] = -fwd[1]; out[7] = 0;
+  out[8] = right[2]; out[9] = up[2]; out[10] = -fwd[2]; out[11] = 0;
+  out[12] = -(right[0] * eye[0] + right[1] * eye[1] + right[2] * eye[2]);
+  out[13] = -(up[0] * eye[0] + up[1] * eye[1] + up[2] * eye[2]);
+  out[14] = (fwd[0] * eye[0] + fwd[1] * eye[1] + fwd[2] * eye[2]);
+  out[15] = 1;
+  return out;
+}
+
+// ---------------------------------------------------------------------
+// シェーダ
+// ---------------------------------------------------------------------
+var VS_MAIN = [
+  "precision mediump float;",
+  "attribute vec3 aPos;",
+  "attribute vec2 aUV;",
+  "attribute float aShade;",
+  "uniform mat4 uMVP;",
+  "uniform vec3 uOffset;",
+  "uniform vec3 uCam;",
+  "uniform float uFogNear;",
+  "uniform float uFogFar;",
+  "varying vec2 vUV;",
+  "varying float vShade;",
+  "varying float vFog;",
+  "void main() {",
+  "  vec3 world = aPos + uOffset;",
+  "  gl_Position = uMVP * vec4(world, 1.0);",
+  "  vUV = aUV;",
+  "  vShade = aShade;",
+  "  float d = length(world - uCam);",
+  "  vFog = clamp((d - uFogNear) / max(uFogFar - uFogNear, 0.001), 0.0, 1.0);",
+  "}"
+].join("\n");
+
+var FS_MAIN = [
+  "precision mediump float;",
+  "uniform sampler2D uTex;",
+  "uniform float uLight;",
+  "uniform float uAlpha;",
+  "uniform vec3 uFogColor;",
+  "varying vec2 vUV;",
+  "varying float vShade;",
+  "varying float vFog;",
+  "void main() {",
+  "  vec4 tex = texture2D(uTex, vUV);",
+  "  vec3 col = tex.rgb * vShade * uLight;",
+  "  gl_FragColor = vec4(mix(col, uFogColor, vFog), tex.a * uAlpha);",
+  "}"
+].join("\n");
+
+var VS_LINE = [
+  "precision mediump float;",
+  "attribute vec3 aPos;",
+  "uniform mat4 uMVP;",
+  "uniform vec3 uOffset;",
+  "void main() {",
+  "  gl_Position = uMVP * vec4(aPos + uOffset, 1.0);",
+  "}"
+].join("\n");
+
+var FS_LINE = [
+  "precision mediump float;",
+  "uniform vec4 uColor;",
+  "void main() { gl_FragColor = uColor; }"
+].join("\n");
+
+function compile(type, src) {
+  var s = gl.createShader(type);
+  gl.shaderSource(s, src);
+  gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+    fatal("シェーダのコンパイルに失敗しました: " + gl.getShaderInfoLog(s));
+    return null;
+  }
+  return s;
+}
+function makeProgram(vsSrc, fsSrc) {
+  var vs = compile(gl.VERTEX_SHADER, vsSrc);
+  var fs = compile(gl.FRAGMENT_SHADER, fsSrc);
+  if (!vs || !fs) return null;
+  var p = gl.createProgram();
+  gl.attachShader(p, vs); gl.attachShader(p, fs);
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
+    fatal("シェーダのリンクに失敗しました: " + gl.getProgramInfoLog(p));
+    return null;
+  }
+  return p;
+}
+
+var progMain = null, progLine = null;
+var U = {}, A = {}, UL = {}, AL = {};
+var atlasTex = null;
+
+if (gl) {
+  progMain = makeProgram(VS_MAIN, FS_MAIN);
+  progLine = makeProgram(VS_LINE, FS_LINE);
+  if (progMain) {
+    A.aPos = gl.getAttribLocation(progMain, "aPos");
+    A.aUV = gl.getAttribLocation(progMain, "aUV");
+    A.aShade = gl.getAttribLocation(progMain, "aShade");
+    U.uMVP = gl.getUniformLocation(progMain, "uMVP");
+    U.uOffset = gl.getUniformLocation(progMain, "uOffset");
+    U.uCam = gl.getUniformLocation(progMain, "uCam");
+    U.uFogNear = gl.getUniformLocation(progMain, "uFogNear");
+    U.uFogFar = gl.getUniformLocation(progMain, "uFogFar");
+    U.uTex = gl.getUniformLocation(progMain, "uTex");
+    U.uLight = gl.getUniformLocation(progMain, "uLight");
+    U.uAlpha = gl.getUniformLocation(progMain, "uAlpha");
+    U.uFogColor = gl.getUniformLocation(progMain, "uFogColor");
+  }
+  if (progLine) {
+    AL.aPos = gl.getAttribLocation(progLine, "aPos");
+    UL.uMVP = gl.getUniformLocation(progLine, "uMVP");
+    UL.uOffset = gl.getUniformLocation(progLine, "uOffset");
+    UL.uColor = gl.getUniformLocation(progLine, "uColor");
+  }
+  if (progMain) {
+    atlasTex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, atlasTex);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, buildAtlas());
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  }
+}
+
+// ---------------------------------------------------------------------
+// チャンク管理・地形生成
+// ---------------------------------------------------------------------
+var chunks = new Map();
+function chunkKey(cx, cz) { return cx + "," + cz; }
+function chunkIndex(lx, ly, lz) { return lx + CHUNK_SIZE * lz + CHUNK_SIZE * CHUNK_SIZE * ly; }
+
+function createChunk(cx, cz) {
+  return {
+    cx: cx, cz: cz,
+    data: new Uint8Array(CHUNK_SIZE * CHUNK_SIZE * CHUNK_HEIGHT),
+    generated: false, dirty: false,
+    mesh: { opaque: null, water: null }
+  };
+}
+
+// チャンク内へ書き込む (範囲外は無視)
+function setRaw(ch, wx, y, wz, id, onlyAir) {
+  var lx = wx - ch.cx * CHUNK_SIZE, lz = wz - ch.cz * CHUNK_SIZE;
+  if (lx < 0 || lx >= CHUNK_SIZE || lz < 0 || lz >= CHUNK_SIZE) return;
+  if (y < 0 || y >= CHUNK_HEIGHT) return;
+  var i = chunkIndex(lx, y, lz);
+  if (onlyAir && ch.data[i] !== AIR) return;
+  ch.data[i] = id;
+}
+
+function generateChunk(ch) {
+  var data = ch.data;
+  var ox = ch.cx * CHUNK_SIZE, oz = ch.cz * CHUNK_SIZE;
+  for (var z = 0; z < CHUNK_SIZE; z++) {
+    for (var x = 0; x < CHUNK_SIZE; x++) {
+      var wx = ox + x, wz = oz + z;
+      var h = surfaceHeight(wx, wz);
+      var beach = h <= SEA_LEVEL;
+      for (var y = 0; y < CHUNK_HEIGHT; y++) {
+        var id = AIR;
+        if (y <= h) {
+          if (y === h) id = beach ? SAND : GRASS;
+          else if (y >= h - 3) id = beach ? SAND : DIRT;
+          else id = STONE;
+        } else if (y <= SEA_LEVEL) {
+          id = WATER;
+        }
+        data[chunkIndex(x, y, z)] = id;
+      }
+    }
+  }
+  // 木(チャンク境界をまたぐので余白を持って判定する)
+  for (var tz = oz - 3; tz < oz + CHUNK_SIZE + 3; tz++) {
+    for (var tx = ox - 3; tx < ox + CHUNK_SIZE + 3; tx++) {
+      var th = treeAt(tx, tz);
+      if (!th) continue;
+      var base = surfaceHeight(tx, tz) + 1;
+      for (var i = 0; i < th; i++) setRaw(ch, tx, base + i, tz, WOOD, false);
+      var top = base + th;
+      for (var dy = -2; dy <= 1; dy++) {
+        var r = dy <= 0 ? 2 : 1;
+        for (var dx = -r; dx <= r; dx++) {
+          for (var dz = -r; dz <= r; dz++) {
+            if (dx === 0 && dz === 0 && dy < 0) continue; // 幹の位置は空ける
+            if (Math.abs(dx) === r && Math.abs(dz) === r && dy === 1) continue; // 角を削る
+            if (hash2i(tx + dx, tz + dz + dy * 7, SEED + 913) < 0.14) continue; // 穴あき
+            setRaw(ch, tx + dx, top + dy, tz + dz, LEAVES, true);
+          }
+        }
+      }
+    }
+  }
+  ch.generated = true;
+  ch.dirty = true;
+}
+
+function getChunk(cx, cz, create) {
+  var k = chunkKey(cx, cz);
+  var ch = chunks.get(k);
+  if (!ch && create) { ch = createChunk(cx, cz); chunks.set(k, ch); }
+  return ch;
+}
+
+function getBlock(x, y, z) {
+  x = Math.floor(x); y = Math.floor(y); z = Math.floor(z);
+  if (y < 0 || y >= CHUNK_HEIGHT) return AIR;
+  var cx = Math.floor(x / CHUNK_SIZE), cz = Math.floor(z / CHUNK_SIZE);
+  var k = chunkKey(cx, cz);
+  var ch = chunks.get(k);
+  if (!ch) { ch = createChunk(cx, cz); chunks.set(k, ch); }
+  if (!ch.generated) generateChunk(ch);
+  var lx = x - cx * CHUNK_SIZE, lz = z - cz * CHUNK_SIZE;
+  return ch.data[chunkIndex(lx, y, lz)];
+}
+
+// 内部変更: 変更したチャンクと隣接チャンクに再メッシュの印を付ける
+function markDirtyAround(x, z) {
+  var cx = Math.floor(x / CHUNK_SIZE), cz = Math.floor(z / CHUNK_SIZE);
+  for (var dz = -1; dz <= 1; dz++) {
+    for (var dx = -1; dx <= 1; dx++) {
+      var ch = chunks.get(chunkKey(cx + dx, cz + dz));
+      if (ch && ch.generated) ch.dirty = true;
+    }
+  }
+}
+
+function setBlockRaw(x, y, z, id) {
+  x = Math.floor(x); y = Math.floor(y); z = Math.floor(z);
+  if (y < 0 || y >= CHUNK_HEIGHT) return false;
+  var cx = Math.floor(x / CHUNK_SIZE), cz = Math.floor(z / CHUNK_SIZE);
+  var ch = getChunk(cx, cz, true);
+  if (!ch.generated) generateChunk(ch);
+  var lx = x - cx * CHUNK_SIZE, lz = z - cz * CHUNK_SIZE;
+  ch.data[chunkIndex(lx, y, lz)] = id;
+  markDirtyAround(x, z);
+  return true;
+}
+
+// ---------------------------------------------------------------------
+// メッシュ生成
+// ---------------------------------------------------------------------
+var useUint32 = !!(gl && uintExt);
+
+function buildChunkMesh(ch) {
+  var ox = ch.cx * CHUNK_SIZE, oz = ch.cz * CHUNK_SIZE;
+  var data = ch.data;
+  var oVerts = [], oIdx = [], wVerts = [], wIdx = [];
+
+  function get(lx, ly, lz) {
+    if (lx >= 0 && lx < CHUNK_SIZE && lz >= 0 && lz < CHUNK_SIZE) {
+      if (ly < 0) return STONE;
+      if (ly >= CHUNK_HEIGHT) return AIR;
+      return data[chunkIndex(lx, ly, lz)];
+    }
+    if (ly < 0) return STONE;
+    if (ly >= CHUNK_HEIGHT) return AIR;
+    return getBlock(ox + lx, ly, oz + lz);
+  }
+  function solid(lx, ly, lz) { return isOpaque(get(lx, ly, lz)); }
+
+  function vertexAO(face, corner, lx, ly, lz) {
+    var n = face.n;
+    var axes = [];
+    for (var a = 0; a < 3; a++) if (n[a] === 0) axes.push(a);
+    var dA = [0, 0, 0], dB = [0, 0, 0];
+    dA[axes[0]] = corner[axes[0]] === 1 ? 1 : -1;
+    dB[axes[1]] = corner[axes[1]] === 1 ? 1 : -1;
+    var s1 = solid(lx + n[0] + dA[0], ly + n[1] + dA[1], lz + n[2] + dA[2]) ? 1 : 0;
+    var s2 = solid(lx + n[0] + dB[0], ly + n[1] + dB[1], lz + n[2] + dB[2]) ? 1 : 0;
+    var cr = solid(lx + n[0] + dA[0] + dB[0], ly + n[1] + dA[1] + dB[1], lz + n[2] + dA[2] + dB[2]) ? 1 : 0;
+    if (s1 && s2) return AO_LEVELS[0];
+    return AO_LEVELS[3 - (s1 + s2 + cr)];
+  }
+
+  for (var y = 0; y < CHUNK_HEIGHT; y++) {
+    for (var z = 0; z < CHUNK_SIZE; z++) {
+      for (var x = 0; x < CHUNK_SIZE; x++) {
+        var id = data[chunkIndex(x, y, z)];
+        if (id === AIR) continue;
+        var isWater = id === WATER;
+        var verts = isWater ? wVerts : oVerts;
+        var idx = isWater ? wIdx : oIdx;
+        for (var f = 0; f < 6; f++) {
+          var face = FACES[f];
+          var nb = get(x + face.n[0], y + face.n[1], z + face.n[2]);
+          if (isWater) { if (nb !== AIR) continue; }
+          else { if (isOpaque(nb)) continue; }
+          var tile = tileFor(id, f);
+          var base = verts.length / 6;
+          for (var v = 0; v < 4; v++) {
+            var c = face.c[v];
+            var uv = tileUV(tile, FACE_UV[v][0], FACE_UV[v][1]);
+            var sh = FACE_SHADE[f] * vertexAO(face, c, x, y, z);
+            verts.push(x + c[0], y + c[1], z + c[2], uv[0], uv[1], sh);
+          }
+          idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+        }
+      }
+    }
+  }
+  return {
+    opaque: uploadMesh(oVerts, oIdx),
+    water: uploadMesh(wVerts, wIdx)
+  };
+}
+
+function uploadMesh(verts, idx) {
+  if (!gl || verts.length === 0) return null;
+  var vbo = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(verts), gl.STATIC_DRAW);
+
+  var indexed = true, indexType = gl.UNSIGNED_SHORT, ibo = null, count = 0, arr = null;
+  var vertCount = verts.length / 6;
+  if (useUint32) {
+    indexType = gl.UNSIGNED_INT;
+    arr = new Uint32Array(idx);
+  } else if (vertCount < 65536) {
+    indexType = gl.UNSIGNED_SHORT;
+    arr = new Uint16Array(idx);
+  } else {
+    // インデックス不可 → 非インデックスの三角形に展開
+    indexed = false;
+    arr = new Float32Array(idx.length * 6);
+    for (var i = 0; i < idx.length; i++) {
+      var s = idx[i] * 6, t = i * 6;
+      arr[t] = verts[s]; arr[t + 1] = verts[s + 1]; arr[t + 2] = verts[s + 2];
+      arr[t + 3] = verts[s + 3]; arr[t + 4] = verts[s + 4]; arr[t + 5] = verts[s + 5];
+    }
+  }
+  if (indexed) {
+    ibo = gl.createBuffer();
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, arr, gl.STATIC_DRAW);
+    count = idx.length;
+  } else {
+    gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+    gl.bufferData(gl.ARRAY_BUFFER, arr, gl.STATIC_DRAW);
+    count = arr.length / 6;
+  }
+  return { vbo: vbo, ibo: ibo, count: count, indexed: indexed, indexType: indexType };
+}
+
+function disposeMesh(m) {
+  if (!m) return;
+  if (m.vbo) gl.deleteBuffer(m.vbo);
+  if (m.ibo) gl.deleteBuffer(m.ibo);
+}
+
+function rebuildChunk(ch) {
+  disposeMesh(ch.mesh.opaque);
+  disposeMesh(ch.mesh.water);
+  // 隣接チャンクのデータを用意してから面カリングする
+  for (var dz = -1; dz <= 1; dz++) {
+    for (var dx = -1; dx <= 1; dx++) {
+      var n = getChunk(ch.cx + dx, ch.cz + dz, true);
+      if (!n.generated) generateChunk(n);
+    }
+  }
+  ch.mesh = buildChunkMesh(ch);
+  ch.dirty = false;
+}
+
+function disposeChunk(ch) {
+  disposeMesh(ch.mesh.opaque);
+  disposeMesh(ch.mesh.water);
+  ch.mesh = { opaque: null, water: null };
+}
+
+// ---------------------------------------------------------------------
+// プレイヤー
+// ---------------------------------------------------------------------
+var player = {
+  x: 0.5, y: 40, z: 0.5,
+  vx: 0, vy: 0, vz: 0,
+  yaw: 0, pitch: 0, onGround: false, inWater: false
+};
+// 入力は「キーボード」「タッチ」「テスト」の3系統を合算して使う
+var input = { keyF: 0, keyR: 0, touchF: 0, touchR: 0, testF: 0, testR: 0, jump: false };
+var jumpLatch = false, jumpQueued = false;
+function clampUnit(v) { return v < -1 ? -1 : v > 1 ? 1 : v; }
+function effForward() { return clampUnit(input.keyF + input.touchF + input.testF); }
+function effRight() { return clampUnit(input.keyR + input.touchR + input.testR); }
+
+function forwardVec() {
+  var cp = Math.cos(player.pitch), sp = Math.sin(player.pitch);
+  var cy = Math.cos(player.yaw), sy = Math.sin(player.yaw);
+  return [-sy * cp, sp, -cy * cp];
+}
+function rightVec() {
+  var cy = Math.cos(player.yaw), sy = Math.sin(player.yaw);
+  return [cy, 0, -sy];
+}
+function upVec() {
+  var f = forwardVec(), r = rightVec();
+  return [r[1] * f[2] - r[2] * f[1], r[2] * f[0] - r[0] * f[2], r[0] * f[1] - r[1] * f[0]];
+}
+function eyePosition() { return [player.x, player.y + EYE_HEIGHT, player.z]; }
+
+// ブロックとプレイヤーAABBの交差
+function blockHitsPlayer(bx, by, bz) {
+  var px0 = player.x - PLAYER_HW, px1 = player.x + PLAYER_HW;
+  var py0 = player.y, py1 = player.y + PLAYER_HEIGHT;
+  var pz0 = player.z - PLAYER_HW, pz1 = player.z + PLAYER_HW;
+  return (px0 < bx + 1 && px1 > bx && py0 < by + 1 && py1 > by && pz0 < bz + 1 && pz1 > bz);
+}
+function collides() {
+  var minX = Math.floor(player.x - PLAYER_HW), maxX = Math.floor(player.x + PLAYER_HW);
+  var minY = Math.floor(player.y), maxY = Math.floor(player.y + PLAYER_HEIGHT);
+  var minZ = Math.floor(player.z - PLAYER_HW), maxZ = Math.floor(player.z + PLAYER_HW);
+  for (var y = minY; y <= maxY; y++) {
+    for (var z = minZ; z <= maxZ; z++) {
+      for (var x = minX; x <= maxX; x++) {
+        if (isSolid(getBlock(x, y, z))) return true;
+      }
+    }
+  }
+  return false;
+}
+function blockIsWater(x, y, z) { return getBlock(x, y, z) === WATER; }
+
+function moveWithCollision(dx, dy, dz) {
+  var steps = Math.max(1, Math.ceil(Math.max(Math.abs(dx), Math.abs(dy), Math.abs(dz)) / 0.2));
+  var sx = dx / steps, sy = dy / steps, sz = dz / steps;
+  for (var i = 0; i < steps; i++) {
+    player.x += sx;
+    if (collides()) { player.x -= sx; player.vx = 0; }
+    player.z += sz;
+    if (collides()) { player.z -= sz; player.vz = 0; }
+    player.y += sy;
+    if (collides()) {
+      player.y -= sy;
+      if (sy < 0) player.onGround = true;
+      player.vy = 0;
+    }
+  }
+}
+
+var walkAccum = 0;
+function physicsStep(dt) {
+  if (!(dt > 0)) return;
+  dt = Math.min(dt, 0.05);
+
+  var feetWater = blockIsWater(player.x, player.y + 0.2, player.z);
+  var midWater = blockIsWater(player.x, player.y + 0.9, player.z);
+  var wasWater = player.inWater;
+  player.inWater = feetWater || midWater;
+  if (player.inWater && !wasWater) playSound("splash");
+
+  // 水平移動(入力をそのまま速度に)
+  var f = forwardVec(), r = rightVec();
+  var fwdAmt = effForward(), rightAmt = effRight();
+  var fx = f[0], fz = f[2], rx = r[0], rz = r[2];
+  var len = Math.hypot(fx, fz);
+  if (len > 0.0001) { fx /= len; fz /= len; } else { fx = 0; fz = 0; }
+  var dx = fx * fwdAmt + rx * rightAmt;
+  var dz = fz * fwdAmt + rz * rightAmt;
+  var dl = Math.hypot(dx, dz);
+  if (dl > 1) { dx /= dl; dz /= dl; }
+  var speed = player.inWater ? 2.8 : 5.0;
+  player.vx = dx * speed;
+  player.vz = dz * speed;
+
+  // ジャンプ / 泳ぎ
+  var wantJump = input.jump || jumpQueued;
+  if (wantJump) {
+    if (player.inWater) { player.vy = 3.6; }
+    else if (!jumpLatch && player.onGround) {
+      player.vy = 9.0; player.onGround = false; playSound("jump");
+    }
+    jumpLatch = true;
+  } else {
+    jumpLatch = false;
+  }
+  jumpQueued = false;
+
+  // 重力
+  if (player.inWater) {
+    player.vy -= 8.5 * dt;
+    if (player.vy < -3.2) player.vy = -3.2;
+  } else {
+    player.vy -= 26.0 * dt;
+    if (player.vy < -34) player.vy = -34;
+  }
+
+  if (player.vy > 0) player.onGround = false;
+  moveWithCollision(player.vx * dt, player.vy * dt, player.vz * dt);
+
+  // 足音
+  if (player.onGround && !player.inWater) {
+    walkAccum += Math.hypot(player.vx, player.vz) * dt;
+    if (walkAccum > 2.0) { walkAccum = 0; playSound("step"); }
+  } else { walkAccum = 0; }
+
+  if (player.y < -20) spawnPlayer(); // 落下しすぎたら復帰
+}
+
+// ---------------------------------------------------------------------
+// レイキャスト (DDA)
+// ---------------------------------------------------------------------
+function raycast(maxDist) {
+  maxDist = maxDist || REACH;
+  var e = eyePosition(), f = forwardVec();
+  var dx = f[0], dy = f[1], dz = f[2];
+  var l = Math.hypot(dx, dy, dz) || 1;
+  dx /= l; dy /= l; dz /= l;
+
+  var x = Math.floor(e[0]), y = Math.floor(e[1]), z = Math.floor(e[2]);
+  var stepX = dx > 0 ? 1 : dx < 0 ? -1 : 0;
+  var stepY = dy > 0 ? 1 : dy < 0 ? -1 : 0;
+  var stepZ = dz > 0 ? 1 : dz < 0 ? -1 : 0;
+  var tDX = stepX !== 0 ? Math.abs(1 / dx) : Infinity;
+  var tDY = stepY !== 0 ? Math.abs(1 / dy) : Infinity;
+  var tDZ = stepZ !== 0 ? Math.abs(1 / dz) : Infinity;
+  var tMaxX = stepX > 0 ? (x + 1 - e[0]) / dx : stepX < 0 ? (x - e[0]) / dx : Infinity;
+  var tMaxY = stepY > 0 ? (y + 1 - e[1]) / dy : stepY < 0 ? (y - e[1]) / dy : Infinity;
+  var tMaxZ = stepZ > 0 ? (z + 1 - e[2]) / dz : stepZ < 0 ? (z - e[2]) / dz : Infinity;
+  var face = [0, 1, 0], t = 0;
+
+  if (isTargetable(getBlock(x, y, z))) return { x: x, y: y, z: z, face: face.slice() };
+  for (var i = 0; i < 256; i++) {
+    if (tMaxX < tMaxY) {
+      if (tMaxX < tMaxZ) { x += stepX; t = tMaxX; tMaxX += tDX; face = [-stepX, 0, 0]; }
+      else { z += stepZ; t = tMaxZ; tMaxZ += tDZ; face = [0, 0, -stepZ]; }
+    } else {
+      if (tMaxY < tMaxZ) { y += stepY; t = tMaxY; tMaxY += tDY; face = [0, -stepY, 0]; }
+      else { z += stepZ; t = tMaxZ; tMaxZ += tDZ; face = [0, 0, -stepZ]; }
+    }
+    if (t > maxDist) return null;
+    if (isTargetable(getBlock(x, y, z))) return { x: x, y: y, z: z, face: face.slice() };
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------
+// 効果音 (WebAudio で合成 / 外部ファイルなし)
+// ---------------------------------------------------------------------
+var Sound = {
+  ctx: null, master: null, noise: null, muted: false,
+  init: function () {
+    if (this.ctx) return;
+    var C = window.AudioContext || window.webkitAudioContext;
+    if (!C) return;
+    try { this.ctx = new C(); } catch (e) { return; }
+    this.master = this.ctx.createGain();
+    this.master.gain.value = 0.45;
+    this.master.connect(this.ctx.destination);
+    var len = Math.floor(this.ctx.sampleRate * 0.6);
+    var buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+    var d = buf.getChannelData(0);
+    for (var i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    this.noise = buf;
+  },
+  resume: function () { if (this.ctx && this.ctx.state === "suspended") this.ctx.resume(); },
+  burst: function (dur, gain, type, f0, f1, q) {
+    var t = this.ctx.currentTime;
+    var src = this.ctx.createBufferSource(); src.buffer = this.noise; src.loop = true;
+    var filt = this.ctx.createBiquadFilter(); filt.type = type;
+    filt.frequency.setValueAtTime(f0, t);
+    filt.frequency.exponentialRampToValueAtTime(Math.max(f1, 20), t + dur);
+    filt.Q.value = q || 1;
+    var g = this.ctx.createGain();
+    g.gain.setValueAtTime(gain, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(filt); filt.connect(g); g.connect(this.master);
+    src.start(t); src.stop(t + dur + 0.02);
+  },
+  tone: function (freq, dur, gain, type) {
+    var t = this.ctx.currentTime;
+    var o = this.ctx.createOscillator(); o.type = type || "triangle";
+    o.frequency.setValueAtTime(freq, t);
+    o.frequency.exponentialRampToValueAtTime(freq * 0.6, t + dur);
+    var g = this.ctx.createGain();
+    g.gain.setValueAtTime(gain, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(this.master);
+    o.start(t); o.stop(t + dur + 0.02);
+  }
+};
+
+function playSound(kind) {
+  Sound.init();
+  if (!Sound.ctx || Sound.muted) return;
+  switch (kind) {
+    case "step": Sound.burst(0.09, 0.10, "lowpass", 900, 350, 1); break;
+    case "jump": Sound.tone(320, 0.09, 0.06, "square"); break;
+    case "break": Sound.burst(0.20, 0.28, "lowpass", 2200, 300, 1); Sound.tone(180, 0.13, 0.10, "square"); break;
+    case "place": Sound.burst(0.10, 0.22, "bandpass", 700, 1400, 2); Sound.tone(420, 0.07, 0.08, "triangle"); break;
+    case "splash": Sound.burst(0.35, 0.20, "bandpass", 400, 1800, 1.2); break;
+  }
+}
+
+// ---------------------------------------------------------------------
+// 昼夜サイクル
+//   時刻 time は 0..1 (0=夜明け/6:00, 0.25=正午/12:00,
+//   0.5=日没/18:00, 0.75=真夜中/0:00)。1周は CYCLE_SECONDS 秒。
+// ---------------------------------------------------------------------
+var time = 0.28; // 昼から開始
+var skyColor = [0.5, 0.7, 1.0];
+var dayLight = 1.0;
+var fogNear = 20, fogFar = 45;
+
+function updateSky() {
+  var sh = Math.sin(time * Math.PI * 2); // -1(真夜中) .. +1(正午)
+  var day = clamp01((sh + 0.16) / 0.5);
+  var horizon = Math.max(0, 1 - Math.abs(sh) / 0.32);
+  var night = [0.02, 0.03, 0.09], dcol = [0.50, 0.71, 1.0], dusk = [0.95, 0.52, 0.30];
+  for (var i = 0; i < 3; i++) {
+    var v = night[i] + (dcol[i] - night[i]) * day;
+    skyColor[i] = v + (dusk[i] - v) * horizon * 0.55;
+  }
+  dayLight = 0.20 + 0.80 * day;
+
+  // 距離フォグは描画距離に合わせる
+  var viewDist = renderDistance * CHUNK_SIZE;
+  fogNear = viewDist * 0.55;
+  fogFar = viewDist * 0.98;
+}
+
+function timeString() {
+  var totalMin = Math.floor((time * 24 * 60 + 6 * 60)) % (24 * 60);
+  var hh = Math.floor(totalMin / 60), mm = totalMin % 60;
+  return (hh < 10 ? "0" : "") + hh + ":" + (mm < 10 ? "0" : "") + mm;
+}
+
+// ---------------------------------------------------------------------
+// チャンクのストリーミング(1フレーム 1〜2 チャンク)
+// ---------------------------------------------------------------------
+var renderDistance = 3;
+var activeSet = new Set();
+var activeList = [];
+
+function collectNeeded() {
+  var pcx = Math.floor(player.x / CHUNK_SIZE), pcz = Math.floor(player.z / CHUNK_SIZE);
+  var R = renderDistance, list = [];
+  for (var dz = -R; dz <= R; dz++) {
+    for (var dx = -R; dx <= R; dx++) {
+      var d2 = dx * dx + dz * dz;
+      if (d2 > (R + 0.5) * (R + 0.5)) continue;
+      list.push([pcx + dx, pcz + dz, d2]);
+    }
+  }
+  list.sort(function (a, b) { return a[2] - b[2]; });
+  return list;
+}
+
+var chunkBudget = 2;
+function processChunks() {
+  if (!gl) return;
+  var needed = collectNeeded();
+  activeSet.clear();
+  activeList.length = 0;
+  var budget = chunkBudget;
+  for (var i = 0; i < needed.length; i++) {
+    var cx = needed[i][0], cz = needed[i][1];
+    var k = chunkKey(cx, cz);
+    activeSet.add(k);
+    var ch = chunks.get(k);
+    if (!ch) { ch = createChunk(cx, cz); chunks.set(k, ch); }
+    if (!ch.generated) { if (budget > 0) { generateChunk(ch); budget--; } continue; }
+    if (ch.dirty) {
+      if (budget > 0) { rebuildChunk(ch); budget--; }
+      if (ch.mesh.opaque || ch.mesh.water) activeList.push(ch);
+      continue;
+    }
+    if (ch.mesh.opaque || ch.mesh.water) activeList.push(ch);
+  }
+  // 遠方チャンクの破棄(隣接参照のため余白を残す)
+  var pcx2 = Math.floor(player.x / CHUNK_SIZE), pcz2 = Math.floor(player.z / CHUNK_SIZE);
+  var keep = renderDistance + 2;
+  chunks.forEach(function (ch, k) {
+    if (Math.abs(ch.cx - pcx2) > keep || Math.abs(ch.cz - pcz2) > keep) {
+      disposeChunk(ch);
+      chunks.delete(k);
+    }
+  });
+}
+
+// 読み込み済みチャンク数(常に最新を返す)
+function countChunks() {
+  var n = 0;
+  chunks.forEach(function (ch) { if (ch.generated) n++; });
+  return n;
+}
+
+// ---------------------------------------------------------------------
+// 描画
+// ---------------------------------------------------------------------
+var matProj = new Float32Array(16);
+var matView = new Float32Array(16);
+var matMVP = new Float32Array(16);
+var lineVBO = null, lineCount = 0;
+
+function setupLineCube() {
+  if (!gl) return;
+  var e = [];
+  var lo = -0.003, hi = 1.003;
+  var V = [
+    [lo,lo,lo],[hi,lo,lo],[hi,lo,hi],[lo,lo,hi],
+    [lo,hi,lo],[hi,hi,lo],[hi,hi,hi],[lo,hi,hi]
+  ];
+  var E = [0,1,1,2,2,3,3,0, 4,5,5,6,6,7,7,4, 0,4,1,5,2,6,3,7];
+  for (var i = 0; i < E.length; i++) {
+    var p = V[E[i]];
+    e.push(p[0], p[1], p[2]);
+  }
+  lineVBO = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, lineVBO);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(e), gl.STATIC_DRAW);
+  lineCount = e.length / 3;
+}
+
+var stats = { triangles: 0, fps: 0 };
+Object.defineProperty(stats, "chunks", { get: countChunks, enumerable: true });
+var _fpsFrames = 0, _fpsTimer = 0;
+var target = null; // 照準が狙っているブロック
+
+function drawMesh(m) {
+  if (!m) return 0;
+  gl.bindBuffer(gl.ARRAY_BUFFER, m.vbo);
+  gl.enableVertexAttribArray(A.aPos);
+  gl.vertexAttribPointer(A.aPos, 3, gl.FLOAT, false, 24, 0);
+  gl.enableVertexAttribArray(A.aUV);
+  gl.vertexAttribPointer(A.aUV, 2, gl.FLOAT, false, 24, 12);
+  gl.enableVertexAttribArray(A.aShade);
+  gl.vertexAttribPointer(A.aShade, 1, gl.FLOAT, false, 24, 20);
+  if (m.indexed) {
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, m.ibo);
+    gl.drawElements(gl.TRIANGLES, m.count, m.indexType, 0);
+  } else {
+    gl.drawArrays(gl.TRIANGLES, 0, m.count);
+  }
+  return m.count / 3;
+}
+
+function resize() {
+  var dpr = Math.min(window.devicePixelRatio || 1, 2);
+  var w = Math.max(1, Math.floor(window.innerWidth * dpr));
+  var h = Math.max(1, Math.floor(window.innerHeight * dpr));
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+}
+
+function draw() {
+  if (!gl) return;
+  resize();
+  var w = canvas.width, h = canvas.height;
+  gl.viewport(0, 0, w, h);
+  gl.clearColor(skyColor[0], skyColor[1], skyColor[2], 1);
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+  var eye = eyePosition();
+  var fwd = forwardVec(), right = rightVec(), up = upVec();
+  mat4Perspective(matProj, 70 * Math.PI / 180, w / h, 0.08, 1000);
+  mat4View(matView, eye, right, up, fwd);
+  mat4Multiply(matMVP, matProj, matView);
+
+  var underwater = blockIsWater(player.x, player.y + EYE_HEIGHT, player.z);
+  var fc = underwater ? [0.10, 0.28, 0.50] : skyColor;
+  var fn = underwater ? 0.5 : fogNear;
+  var ff = underwater ? 16 : fogFar;
+  overlayWater.style.display = underwater ? "block" : "none";
+
+  gl.enable(gl.DEPTH_TEST);
+  gl.enable(gl.CULL_FACE);
+  gl.cullFace(gl.BACK);
+  gl.disable(gl.BLEND);
+  gl.depthMask(true);
+  gl.useProgram(progMain);
+
+  gl.uniformMatrix4fv(U.uMVP, false, matMVP);
+  gl.uniform3f(U.uCam, eye[0], eye[1], eye[2]);
+  gl.uniform1f(U.uFogNear, fn);
+  gl.uniform1f(U.uFogFar, ff);
+  gl.uniform3f(U.uFogColor, fc[0], fc[1], fc[2]);
+  gl.uniform1f(U.uLight, dayLight);
+  gl.uniform1f(U.uAlpha, 1.0);
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, atlasTex);
+  gl.uniform1i(U.uTex, 0);
+
+  var tris = 0, i, ch;
+  for (i = 0; i < activeList.length; i++) {
+    ch = activeList[i];
+    gl.uniform3f(U.uOffset, ch.cx * CHUNK_SIZE, 0, ch.cz * CHUNK_SIZE);
+    tris += drawMesh(ch.mesh.opaque);
+  }
+
+  // 水(半透明)
+  gl.enable(gl.BLEND);
+  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+  gl.depthMask(false);
+  gl.disable(gl.CULL_FACE);
+  gl.uniform1f(U.uAlpha, 0.72);
+  gl.uniform1f(U.uLight, Math.max(dayLight, 0.55));
+  for (i = 0; i < activeList.length; i++) {
+    ch = activeList[i];
+    gl.uniform3f(U.uOffset, ch.cx * CHUNK_SIZE, 0, ch.cz * CHUNK_SIZE);
+    tris += drawMesh(ch.mesh.water);
+  }
+  gl.depthMask(true);
+  gl.disable(gl.BLEND);
+
+  // 照準の枠線
+  if (progLine && target) {
+    gl.useProgram(progLine);
+    gl.uniformMatrix4fv(UL.uMVP, false, matMVP);
+    gl.uniform3f(UL.uOffset, target.x, target.y, target.z);
+    gl.uniform4f(UL.uColor, 0.1, 0.1, 0.1, 1);
+    gl.bindBuffer(gl.ARRAY_BUFFER, lineVBO);
+    gl.enableVertexAttribArray(AL.aPos);
+    gl.vertexAttribPointer(AL.aPos, 3, gl.FLOAT, false, 0, 0);
+    gl.drawArrays(gl.LINES, 0, lineCount);
+  }
+
+  stats.triangles = tris;
+}
+
+// ---------------------------------------------------------------------
+// ブロック操作
+// ---------------------------------------------------------------------
+function breakBlock() {
+  var r = raycast(REACH);
+  if (!r) return false;
+  if (r.y <= 0) return false; // 最下層は壊せない
+  if (getBlock(r.x, r.y, r.z) === AIR) return false;
+  setBlockRaw(r.x, r.y, r.z, AIR);
+  playSound("break");
+  return true;
+}
+
+function placeBlock() {
+  var r = raycast(REACH);
+  if (!r) return false;
+  var x = r.x + r.face[0], y = r.y + r.face[1], z = r.z + r.face[2];
+  if (y < 0 || y >= CHUNK_HEIGHT) return false;
+  var cur = getBlock(x, y, z);
+  if (cur !== AIR && cur !== WATER) return false;
+  if (blockHitsPlayer(x, y, z)) return false;
+  var id = hotbar[selected];
+  if (!id) return false;
+  setBlockRaw(x, y, z, id);
+  playSound("place");
+  return true;
+}
+
+// ---------------------------------------------------------------------
+// スポーン
+// ---------------------------------------------------------------------
+function findSpawn() {
+  for (var r = 0; r < 220; r += 2) {
+    for (var a = 0; a < 12; a++) {
+      var ang = a / 12 * Math.PI * 2;
+      var x = Math.round(Math.cos(ang) * r), z = Math.round(Math.sin(ang) * r);
+      var h = surfaceHeight(x, z);
+      if (h > SEA_LEVEL + 1) return [x + 0.5, h + 2.2, z + 0.5];
+    }
+  }
+  return [0.5, 40, 0.5];
+}
+function spawnPlayer() {
+  var s = findSpawn();
+  player.x = s[0]; player.y = s[1]; player.z = s[2];
+  player.vx = player.vy = player.vz = 0;
+  player.onGround = false;
+}
+
+// ---------------------------------------------------------------------
+// ホットバー / HUD
+// ---------------------------------------------------------------------
+var hotbar = [GRASS, DIRT, STONE, COBBLE, SAND, WOOD, LEAVES, PLANKS, WATER];
+var selected = 0;
+var slotEls = [];
+
+function buildHotbar() {
+  hotbarEl.innerHTML = "";
+  slotEls = [];
+  for (var i = 0; i < hotbar.length; i++) {
+    (function (idx) {
+      var d = document.createElement("div");
+      d.className = "slot";
+      d.style.background = BLOCK_UI[hotbar[idx]] || "#666";
+      d.innerHTML = '<span class="num">' + (idx + 1) + '</span><span class="nm">' + (BLOCK_NAMES[hotbar[idx]] || "") + '</span>';
+      d.addEventListener("pointerdown", function (e) { e.stopPropagation(); e.preventDefault(); selectSlot(idx); });
+      hotbarEl.appendChild(d);
+      slotEls.push(d);
+    })(i);
+  }
+  updateHotbarUI();
+}
+function selectSlot(i) {
+  if (i < 0 || i >= hotbar.length) return;
+  selected = i;
+  updateHotbarUI();
+}
+function updateHotbarUI() {
+  for (var i = 0; i < slotEls.length; i++) {
+    if (i === selected) slotEls[i].classList.add("sel");
+    else slotEls[i].classList.remove("sel");
+  }
+}
+
+var hudTimer = 0;
+function updateHUD(dt) {
+  hudTimer += dt;
+  if (hudTimer < 0.2) return;
+  hudTimer = 0;
+  var count = countChunks();
+  infoEl.innerHTML =
+    "FPS: <b>" + Math.round(stats.fps) + "</b><br>" +
+    "座標: <b>" + player.x.toFixed(1) + ", " + player.y.toFixed(1) + ", " + player.z.toFixed(1) + "</b><br>" +
+    "時刻: <b>" + timeString() + "</b><br>" +
+    "チャンク: <b>" + count + "</b> / 三角形: <b>" + stats.triangles + "</b>";
+}
+
+// ---------------------------------------------------------------------
+// 入力 (PC / タッチ共通)
+// ---------------------------------------------------------------------
+var state = "title";
+var isTouch = ("ontouchstart" in window) ||
+  (navigator.maxTouchPoints > 0) || (navigator.msMaxTouchPoints > 0);
+if (isTouch) document.body.classList.add("touch");
+
+var keys = {};
+
+function onKeyDown(e) {
+  if (state !== "playing") return;
+  var k = e.key.toLowerCase();
+  keys[k] = true;
+  if (k === " " || e.code === "Space") { input.jump = true; e.preventDefault(); }
+  if (k >= "1" && k <= "9") selectSlot(parseInt(k, 10) - 1);
+}
+function onKeyUp(e) {
+  var k = e.key.toLowerCase();
+  keys[k] = false;
+  if (k === " " || e.code === "Space") input.jump = false;
+}
+function applyKeyInput() {
+  var f = 0, r = 0;
+  if (keys["w"] || keys["arrowup"]) f += 1;
+  if (keys["s"] || keys["arrowdown"]) f -= 1;
+  if (keys["d"] || keys["arrowright"]) r += 1;
+  if (keys["a"] || keys["arrowleft"]) r -= 1;
+  input.keyF = f; input.keyR = r;
+}
+window.addEventListener("keydown", onKeyDown);
+window.addEventListener("keyup", onKeyUp);
+
+// --- マウス / ポインタロック ---
+var locked = false;
+var mouseDragging = false, lastMX = 0, lastMY = 0;
+var LOOK_SENS = 0.0026;
+
+canvas.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+
+function applyLook(dx, dy) {
+  player.yaw -= dx * LOOK_SENS;
+  player.pitch -= dy * LOOK_SENS;
+  var lim = Math.PI / 2 - 0.01;
+  if (player.pitch > lim) player.pitch = lim;
+  if (player.pitch < -lim) player.pitch = -lim;
+}
+
+document.addEventListener("pointerlockchange", function () {
+  locked = document.pointerLockElement === canvas;
+});
+
+// --- タッチ / Pointer Events (マルチタッチ対応) ---
+var stickPointer = null, lookPointer = null, lookLastX = 0, lookLastY = 0;
+var longPressTimer = null, longPressActive = false;
+
+function setStick(cx, cy, x, y) {
+  var dx = x - cx, dy = y - cy;
+  var R = 56, len = Math.hypot(dx, dy);
+  var nx = dx, ny = dy;
+  if (len > R) { nx = dx / len * R; ny = dy / len * R; }
+  stickKnob.style.transform = "translate(" + nx + "px," + ny + "px)";
+  input.touchR = nx / R;
+  input.touchF = -ny / R;
+}
+function resetStick() {
+  stickKnob.style.transform = "translate(0,0)";
+  input.touchF = 0; input.touchR = 0;
+}
+
+stickBase.addEventListener("pointerdown", function (e) {
+  if (state !== "playing") return;
+  e.preventDefault();
+  stickPointer = e.pointerId;
+  stickBase.setPointerCapture(e.pointerId);
+  var rect = stickBase.getBoundingClientRect();
+  setStick(rect.left + rect.width / 2, rect.top + rect.height / 2, e.clientX, e.clientY);
+});
+stickBase.addEventListener("pointermove", function (e) {
+  if (e.pointerId !== stickPointer) return;
+  e.preventDefault();
+  var rect = stickBase.getBoundingClientRect();
+  setStick(rect.left + rect.width / 2, rect.top + rect.height / 2, e.clientX, e.clientY);
+});
+function endStick(e) { if (e.pointerId === stickPointer) { stickPointer = null; resetStick(); } }
+stickBase.addEventListener("pointerup", endStick);
+stickBase.addEventListener("pointercancel", endStick);
+
+canvas.addEventListener("pointerdown", function (e) {
+  if (state !== "playing") return;
+  if (e.pointerType === "mouse") {
+    // クリックでポインタロック、固定中は左右クリックで破壊/設置
+    if (!locked) {
+      if (canvas.requestPointerLock) { try { canvas.requestPointerLock(); } catch (err) {} }
+      mouseDragging = true; lastMX = e.clientX; lastMY = e.clientY;
+    } else {
+      if (e.button === 0) breakBlock();
+      else if (e.button === 2) placeBlock();
+    }
+    return;
+  }
+  e.preventDefault();
+  if (lookPointer === null) {
+    lookPointer = e.pointerId;
+    lookLastX = e.clientX; lookLastY = e.clientY;
+    try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
+    // 画面右側の長押しで破壊
+    if (e.clientX > window.innerWidth * 0.5) {
+      longPressActive = false;
+      clearLongPress();
+      longPressTimer = setTimeout(function () {
+        if (lookPointer === e.pointerId && state === "playing") {
+          longPressActive = true;
+          breakBlock();
+          longPressTimer = setInterval(function () { if (state === "playing") breakBlock(); }, 400);
+        }
+      }, 450);
+    }
+  }
+});
+canvas.addEventListener("pointermove", function (e) {
+  if (state !== "playing") return;
+  if (e.pointerType === "mouse") {
+    if (locked) applyLook(e.movementX || 0, e.movementY || 0);
+    else if (mouseDragging) {
+      applyLook(e.clientX - lastMX, e.clientY - lastMY);
+      lastMX = e.clientX; lastMY = e.clientY;
+    }
+    return;
+  }
+  if (e.pointerId !== lookPointer) return;
+  e.preventDefault();
+  var mdx = e.clientX - lookLastX, mdy = e.clientY - lookLastY;
+  lookLastX = e.clientX; lookLastY = e.clientY;
+  if (Math.abs(mdx) + Math.abs(mdy) > 6) clearLongPress();
+  applyLook(mdx * 1.6, mdy * 1.6);
+});
+function clearLongPress() {
+  if (longPressTimer) { clearTimeout(longPressTimer); clearInterval(longPressTimer); longPressTimer = null; }
+  longPressActive = false;
+}
+function endLook(e) {
+  if (e.pointerType === "mouse") { mouseDragging = false; return; }
+  if (e.pointerId === lookPointer) { lookPointer = null; clearLongPress(); }
+}
+canvas.addEventListener("pointerup", endLook);
+canvas.addEventListener("pointercancel", endLook);
+window.addEventListener("blur", function () { mouseDragging = false; resetStick(); });
+
+// --- タッチボタン ---
+function bindHold(el, onDown, onUp) {
+  el.addEventListener("pointerdown", function (e) {
+    e.preventDefault(); e.stopPropagation();
+    if (state !== "playing") return;
+    if (onDown) onDown();
+  });
+  el.addEventListener("pointerup", function (e) { e.preventDefault(); e.stopPropagation(); if (onUp) onUp(); });
+  el.addEventListener("pointercancel", function () { if (onUp) onUp(); });
+  el.addEventListener("pointerleave", function () { if (onUp) onUp(); });
+}
+bindHold(document.getElementById("btnJump"),
+  function () { input.jump = true; },
+  function () { input.jump = false; });
+bindHold(document.getElementById("btnBreak"), function () { breakBlock(); }, null);
+bindHold(document.getElementById("btnPlace"), function () { placeBlock(); }, null);
+
+// --- 拡大・スクロール防止 ---
+document.addEventListener("gesturestart", function (e) { e.preventDefault(); });
+document.addEventListener("dblclick", function (e) { e.preventDefault(); });
+document.addEventListener("touchmove", function (e) { e.preventDefault(); }, { passive: false });
+document.addEventListener("touchstart", function (e) {
+  if (e.touches.length > 1) e.preventDefault();
+}, { passive: false });
+
+// ---------------------------------------------------------------------
+// UI ボタン
+// ---------------------------------------------------------------------
+var rdBtns = document.querySelectorAll(".rdbtn");
+function updateRdUI() {
+  for (var i = 0; i < rdBtns.length; i++) {
+    if (parseInt(rdBtns[i].getAttribute("data-rd"), 10) === renderDistance) rdBtns[i].classList.add("on");
+    else rdBtns[i].classList.remove("on");
+  }
+}
+for (var bi = 0; bi < rdBtns.length; bi++) {
+  (function (btn) {
+    btn.addEventListener("click", function () {
+      setRenderDistance(parseInt(btn.getAttribute("data-rd"), 10));
+    });
+  })(rdBtns[bi]);
+}
+function setRenderDistance(n) {
+  n = Math.round(n);
+  if (!(n >= 1)) n = 1;
+  if (n > 8) n = 8;
+  renderDistance = n;
+  updateRdUI();
+}
+
+muteBtn.addEventListener("click", function () {
+  Sound.init(); Sound.resume();
+  Sound.muted = !Sound.muted;
+  muteBtn.textContent = Sound.muted ? "♪ 音OFF" : "♪ 音ON";
+});
+resetBtn.addEventListener("click", function () { if (state === "playing") spawnPlayer(); });
+
+// ---------------------------------------------------------------------
+// 開始
+// ---------------------------------------------------------------------
+function startGame() {
+  if (state === "playing") return;
+  state = "playing";
+  titleEl.style.display = "none";
+  Sound.init(); Sound.resume();
+}
+startBtn.addEventListener("click", startGame);
+
+// 最初のユーザー操作で AudioContext を有効化(iOS の自動再生制限対策)
+function firstGesture() {
+  Sound.init(); Sound.resume();
+  window.removeEventListener("pointerdown", firstGesture);
+  window.removeEventListener("keydown", firstGesture);
+  window.removeEventListener("touchstart", firstGesture);
+}
+window.addEventListener("pointerdown", firstGesture);
+window.addEventListener("keydown", firstGesture);
+window.addEventListener("touchstart", firstGesture);
+
+// ---------------------------------------------------------------------
+// メインループ
+// ---------------------------------------------------------------------
+function update(dt) {
+  time = (time + dt / CYCLE_SECONDS) % 1;
+  updateSky();
+  if (state === "playing") { applyKeyInput(); physicsStep(dt); }
+}
+
+var lastTime = 0;
+function frame(now) {
+  requestAnimationFrame(frame);
+  if (!gl || !progMain) return;
+  if (!lastTime) lastTime = now;
+  var dt = (now - lastTime) / 1000;
+  lastTime = now;
+  if (dt > 0.1) dt = 0.1;
+  if (dt < 0) dt = 0;
+
+  update(dt);
+  processChunks();
+  target = raycast(REACH);
+  draw();
+
+  _fpsFrames++; _fpsTimer += dt;
+  if (_fpsTimer >= 0.5) { stats.fps = _fpsFrames / _fpsTimer; _fpsFrames = 0; _fpsTimer = 0; }
+  updateHUD(dt);
+}
+
+// ---------------------------------------------------------------------
+// 初期化
+// ---------------------------------------------------------------------
+function init() {
+  if (!gl || !progMain) return;
+  updateSky();
+  setupLineCube();
+  spawnPlayer();
+  buildHotbar();
+  setRenderDistance(3);
+  // 初期チャンクを一気に用意(最初の数フレームは表示が粗くてもよい)
+  var s = collectNeeded();
+  for (var i = 0; i < Math.min(s.length, 6); i++) {
+    var ch = getChunk(s[i][0], s[i][1], true);
+    if (!ch.generated) generateChunk(ch);
+  }
+  requestAnimationFrame(frame);
+}
+init();
+
+// ---------------------------------------------------------------------
+// 自動テスト用 API (window.__game)
+//   state    : 'title' | 'playing'
+//   start()  : ゲーム開始
+//   player   : {x,y,z,yaw,pitch,onGround}   ※ yaw/pitch はラジアン
+//   BLOCKS   : 名前→ID
+//   selected : ホットバーの選択index / hotbar: ブロックID配列
+//   stats    : {chunks,triangles,fps}
+//   setTime(t): 0=夜明け(6:00), 0.25=正午, 0.5=日没, 0.75=真夜中
+//   tick(dt) : 描画ループとは独立に物理を dt 秒だけ同期実行
+// ---------------------------------------------------------------------
+var G = {};
+G.BLOCKS = BLOCKS;
+
+Object.defineProperty(G, "state", { get: function () { return state; }, enumerable: true });
+Object.defineProperty(G, "player", {
+  get: function () {
+    return {
+      x: player.x, y: player.y, z: player.z,
+      yaw: player.yaw, pitch: player.pitch,
+      onGround: player.onGround
+    };
+  }, enumerable: true
+});
+Object.defineProperty(G, "selected", {
+  get: function () { return selected; },
+  set: function (v) { selectSlot(v | 0); }, enumerable: true
+});
+Object.defineProperty(G, "hotbar", {
+  get: function () { return hotbar.slice(); }, enumerable: true
+});
+Object.defineProperty(G, "stats", { get: function () { return stats; }, enumerable: true });
+Object.defineProperty(G, "renderDistance", {
+  get: function () { return renderDistance; }, enumerable: true
+});
+
+G.start = function () { startGame(); };
+G.getBlock = function (x, y, z) { return getBlock(x, y, z); };
+G.setBlock = function (x, y, z, id) {
+  id = id | 0;
+  if (id < 0 || id > 15) return;
+  setBlockRaw(x, y, z, id);
+  // テスト用途では即座に再メッシュして結果を反映する
+  remeshNow(x, y, z);
+};
+G.setMove = function (forward, right) {
+  input.testF = Math.max(-1, Math.min(1, +forward || 0));
+  input.testR = Math.max(-1, Math.min(1, +right || 0));
+};
+G.jump = function () { jumpQueued = true; };
+G.look = function (dyaw, dpitch) {
+  player.yaw += (+dyaw || 0);
+  player.pitch += (+dpitch || 0);
+  var lim = Math.PI / 2 - 0.01;
+  if (player.pitch > lim) player.pitch = lim;
+  if (player.pitch < -lim) player.pitch = -lim;
+};
+G.move = function (dx, dz, seconds) {
+  // 世界座標方向 (dx,dz) へ seconds 秒ぶん移動する便利API
+  var len = Math.hypot(dx, dz) || 1;
+  var wx = dx / len, wz = dz / len;
+  var f = forwardVec(), r = rightVec();
+  var fl = Math.hypot(f[0], f[2]) || 1;
+  input.testF = (wx * f[0] + wz * f[2]) / fl;
+  input.testR = (wx * r[0] + wz * r[2]);
+  var total = +seconds || 0, step = 1 / 60;
+  for (var t = 0; t < total; t += step) physicsStep(Math.min(step, total - t));
+  input.testF = 0; input.testR = 0;
+};
+G.breakBlock = function () { return breakBlock(); };
+G.placeBlock = function () { return placeBlock(); };
+G.raycast = function () {
+  var r = raycast(REACH);
+  if (!r) return null;
+  return { x: r.x, y: r.y, z: r.z, face: r.face.slice() };
+};
+G.setRenderDistance = function (n) { setRenderDistance(n); };
+G.setTime = function (t) {
+  t = +t || 0;
+  time = ((t % 1) + 1) % 1;
+  updateSky();
+};
+G.tick = function (dt) {
+  dt = +dt || 0;
+  if (dt <= 0) return;
+  var remain = Math.min(dt, 600), step = 1 / 60, guard = 0;
+  while (remain > 0 && guard++ < 40000) {
+    var s = Math.min(step, remain);
+    physicsStep(s);
+    remain -= s;
+  }
+};
+G.teleport = function (x, y, z) {
+  player.x = +x || 0; player.y = +y || 0; player.z = +z || 0;
+  player.vx = player.vy = player.vz = 0;
+  player.onGround = false;
+};
+function remeshNow(x, y, z) {
+  x = Math.floor(x); z = Math.floor(z);
+  var cx = Math.floor(x / CHUNK_SIZE), cz = Math.floor(z / CHUNK_SIZE);
+  for (var dz = -1; dz <= 1; dz++) {
+    for (var dx = -1; dx <= 1; dx++) {
+      var ch = chunks.get(chunkKey(cx + dx, cz + dz));
+      if (ch && ch.generated) rebuildChunk(ch);
+    }
+  }
+}
+G.remeshNow = remeshNow;
+
+window.__game = G;
+
+})();
+</script>
+</body>
+</html>
