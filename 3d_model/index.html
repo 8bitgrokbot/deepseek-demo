@@ -1,0 +1,1089 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>ファンタジー城 3Dビューア</title>
+<style>
+  :root { --panel: rgba(12,16,26,0.62); --edge: rgba(255,255,255,0.16); }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; height: 100%; width: 100%;
+    overflow: hidden; background: #05070d; color: #eef3ff;
+    overscroll-behavior: none;
+    font-family: "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Yu Gothic", Meiryo, system-ui, -apple-system, sans-serif;
+    -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent;
+  }
+  #c {
+    position: fixed; inset: 0; width: 100%; height: 100%; display: block;
+    touch-action: none; cursor: grab;
+  }
+  #c.dragging { cursor: grabbing; }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--edge);
+    border-radius: 12px;
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+    box-shadow: 0 6px 22px rgba(0,0,0,0.35);
+  }
+  #topbar {
+    position: fixed; top: 0; left: 0; right: 0;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+    padding: 10px calc(10px + env(safe-area-inset-right)) 10px calc(10px + env(safe-area-inset-left));
+    pointer-events: none;
+  }
+  #title {
+    font-weight: 700; font-size: 15px; letter-spacing: .04em;
+    padding: 7px 12px; margin-right: auto;
+    text-shadow: 0 1px 3px rgba(0,0,0,.6); white-space: nowrap;
+  }
+  button {
+    pointer-events: auto; cursor: pointer; font: inherit; font-size: 13px;
+    color: #eef3ff; background: var(--panel); border: 1px solid var(--edge);
+    border-radius: 10px; padding: 8px 12px; white-space: nowrap;
+    -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+    transition: background .12s ease, transform .06s ease;
+  }
+  button:hover { background: rgba(40,60,100,0.75); }
+  button:active { transform: translateY(1px); }
+  button.on { background: rgba(64,140,255,0.55); border-color: rgba(160,200,255,0.7); }
+  #stats {
+    position: fixed; left: calc(10px + env(safe-area-inset-left)); bottom: calc(10px + env(safe-area-inset-bottom));
+    padding: 9px 12px; font-size: 12px; line-height: 1.6; font-variant-numeric: tabular-nums;
+    min-width: 150px;
+  }
+  #stats b { color: #8fd0ff; font-weight: 600; }
+  #help {
+    position: fixed; right: calc(10px + env(safe-area-inset-right)); bottom: calc(10px + env(safe-area-inset-bottom));
+    padding: 9px 12px; font-size: 11.5px; line-height: 1.65; max-width: 62vw;
+  }
+  #help .k { display:inline-block; min-width: 4.6em; color:#8fd0ff; }
+  #err {
+    position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
+    padding: 24px; text-align: center; z-index: 50;
+    background: radial-gradient(120% 120% at 50% 20%, #16233d, #05070d 70%);
+  }
+  #err .box { max-width: 520px; padding: 24px; }
+  #err h1 { font-size: 18px; margin: 0 0 10px; }
+  #err p { font-size: 13.5px; line-height: 1.7; margin: 0; color: #c8d4ea; }
+  @media (max-width: 560px) {
+    #help { display: none; }
+    #title { font-size: 13px; }
+    button { font-size: 12px; padding: 7px 10px; }
+  }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="topbar">
+  <div id="title" class="panel">🏰 ファンタジー城 3Dビューア</div>
+  <button id="btnAuto" class="on">自動回転: ON</button>
+  <button id="btnWire">ワイヤーフレーム: OFF</button>
+  <button id="btnLight">ライティング: 昼</button>
+  <button id="btnReset">リセット</button>
+</div>
+
+<div id="stats" class="panel">
+  頂点数: <b id="statVerts">0</b><br>
+  三角形数: <b id="statTris">0</b><br>
+  FPS: <b id="statFps">--</b>
+</div>
+
+<div id="help" class="panel">
+  <span class="k">ドラッグ</span>: 回転（オービット）<br>
+  <span class="k">ホイール</span>／ピンチ: 拡大・縮小<br>
+  <span class="k">右ドラッグ</span>／2本指: 移動（パン）<br>
+  <span class="k">ダブル</span>クリック/タップ: リセット
+</div>
+
+<div id="err">
+  <div class="box panel">
+    <h1>WebGL を利用できません</h1>
+    <p id="errMsg">お使いのブラウザまたは端末が WebGL に対応していないため、3D 表示を開始できませんでした。ブラウザを最新版に更新するか、ハードウェアアクセラレーションを有効にしてから再度お試しください。</p>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var canvas = document.getElementById("c");
+  var errEl = document.getElementById("err");
+  var errMsg = document.getElementById("errMsg");
+
+  function showError(msg) {
+    if (msg) errMsg.textContent = msg;
+    errEl.style.display = "flex";
+    canvas.style.display = "none";
+  }
+
+  /* ------------------------------------------------------------------ *
+   *  WebGL context
+   * ------------------------------------------------------------------ */
+  var gl = null;
+  try {
+    var attrs = { antialias: true, alpha: false, depth: true, stencil: false, premultipliedAlpha: false, powerPreference: "high-performance" };
+    gl = canvas.getContext("webgl", attrs) || canvas.getContext("experimental-webgl", attrs);
+  } catch (e) {
+    gl = null;
+  }
+  if (!gl) {
+    showError();
+    return;
+  }
+
+  /* ------------------------------------------------------------------ *
+   *  mat4 (column-major, WebGL 標準)
+   * ------------------------------------------------------------------ */
+  function m4() { return new Float32Array(16); }
+
+  function identity() {
+    var o = m4();
+    o[0] = 1; o[5] = 1; o[10] = 1; o[15] = 1;
+    return o;
+  }
+
+  function multiply(a, b) {
+    var o = m4();
+    for (var c = 0; c < 4; c++) {
+      for (var r = 0; r < 4; r++) {
+        o[c * 4 + r] =
+          a[0 * 4 + r] * b[c * 4 + 0] +
+          a[1 * 4 + r] * b[c * 4 + 1] +
+          a[2 * 4 + r] * b[c * 4 + 2] +
+          a[3 * 4 + r] * b[c * 4 + 3];
+      }
+    }
+    return o;
+  }
+
+  function perspective(fovy, aspect, near, far) {
+    var o = m4();
+    var f = 1 / Math.tan(fovy / 2);
+    o[0] = f / aspect;
+    o[5] = f;
+    o[10] = (far + near) / (near - far);
+    o[11] = -1;
+    o[14] = (2 * far * near) / (near - far);
+    return o;
+  }
+
+  function lookAt(eye, center, up) {
+    var zx = eye[0] - center[0], zy = eye[1] - center[1], zz = eye[2] - center[2];
+    var zl = Math.hypot(zx, zy, zz) || 1; zx /= zl; zy /= zl; zz /= zl;
+    var xx = up[1] * zz - up[2] * zy;
+    var xy = up[2] * zx - up[0] * zz;
+    var xz = up[0] * zy - up[1] * zx;
+    var xl = Math.hypot(xx, xy, xz) || 1; xx /= xl; xy /= xl; xz /= xl;
+    var yx = zy * xz - zz * xy;
+    var yy = zz * xx - zx * xz;
+    var yz = zx * xy - zy * xx;
+    var o = m4();
+    o[0] = xx; o[1] = yx; o[2] = zx; o[3] = 0;
+    o[4] = xy; o[5] = yy; o[6] = zy; o[7] = 0;
+    o[8] = xz; o[9] = yz; o[10] = zz; o[11] = 0;
+    o[12] = -(xx * eye[0] + xy * eye[1] + xz * eye[2]);
+    o[13] = -(yx * eye[0] + yy * eye[1] + yz * eye[2]);
+    o[14] = -(zx * eye[0] + zy * eye[1] + zz * eye[2]);
+    o[15] = 1;
+    return o;
+  }
+
+  function translation(x, y, z) {
+    var o = identity(); o[12] = x; o[13] = y; o[14] = z; return o;
+  }
+  function scaleM(x, y, z) {
+    var o = m4(); o[0] = x; o[5] = y; o[10] = z; o[15] = 1; return o;
+  }
+  function rotX(a) {
+    var c = Math.cos(a), s = Math.sin(a), o = identity();
+    o[5] = c; o[6] = s; o[9] = -s; o[10] = c; return o;
+  }
+  function rotY(a) {
+    var c = Math.cos(a), s = Math.sin(a), o = identity();
+    o[0] = c; o[2] = -s; o[8] = s; o[10] = c; return o;
+  }
+  function rotZ(a) {
+    var c = Math.cos(a), s = Math.sin(a), o = identity();
+    o[0] = c; o[1] = s; o[4] = -s; o[5] = c; return o;
+  }
+  function trs(tx, ty, tz, rx, ry, rz, sx, sy, sz) {
+    var m = translation(tx, ty, tz);
+    if (ry) m = multiply(m, rotY(ry));
+    if (rx) m = multiply(m, rotX(rx));
+    if (rz) m = multiply(m, rotZ(rz));
+    m = multiply(m, scaleM(sx, sy, sz));
+    return m;
+  }
+  function transformPoint(m, x, y, z, out) {
+    out[0] = m[0] * x + m[4] * y + m[8] * z + m[12];
+    out[1] = m[1] * x + m[5] * y + m[9] * z + m[13];
+    out[2] = m[2] * x + m[6] * y + m[10] * z + m[14];
+  }
+  // 法線行列 = 左上3x3の逆行列の転置
+  function normalMatrix(m) {
+    var a00 = m[0], a01 = m[1], a02 = m[2];
+    var a10 = m[4], a11 = m[5], a12 = m[6];
+    var a20 = m[8], a21 = m[9], a22 = m[10];
+    var b01 = a22 * a11 - a12 * a21;
+    var b11 = -a22 * a10 + a12 * a20;
+    var b21 = a21 * a10 - a11 * a20;
+    var det = a00 * b01 + a01 * b11 + a02 * b21;
+    if (!det) return [1, 0, 0, 0, 1, 0, 0, 0, 1];
+    det = 1 / det;
+    var i00 = b01 * det;
+    var i01 = (-a22 * a01 + a02 * a21) * det;
+    var i02 = (a12 * a01 - a02 * a11) * det;
+    var i10 = b11 * det;
+    var i11 = (a22 * a00 - a02 * a20) * det;
+    var i12 = (-a12 * a00 + a02 * a10) * det;
+    var i20 = b21 * det;
+    var i21 = (-a21 * a00 + a01 * a20) * det;
+    var i22 = (a11 * a00 - a01 * a10) * det;
+    return [i00, i10, i20, i01, i11, i21, i02, i12, i22];
+  }
+  function transformNormal(nm, x, y, z, out) {
+    out[0] = nm[0] * x + nm[3] * y + nm[6] * z;
+    out[1] = nm[1] * x + nm[4] * y + nm[7] * z;
+    out[2] = nm[2] * x + nm[5] * y + nm[8] * z;
+    var l = Math.hypot(out[0], out[1], out[2]) || 1;
+    out[0] /= l; out[1] /= l; out[2] /= l;
+  }
+
+  /* ------------------------------------------------------------------ *
+   *  プリミティブ生成
+   * ------------------------------------------------------------------ */
+  function makeBox(w, h, d) {
+    var x = w / 2, y = h / 2, z = d / 2;
+    var pos = [], nor = [], idx = [];
+    function face(a, b, c, dd, nx, ny, nz) {
+      var s = pos.length / 3;
+      var v = [a, b, c, dd];
+      for (var i = 0; i < 4; i++) {
+        pos.push(v[i][0], v[i][1], v[i][2]);
+        nor.push(nx, ny, nz);
+      }
+      idx.push(s, s + 1, s + 2, s, s + 2, s + 3);
+    }
+    face([-x, -y, z], [x, -y, z], [x, y, z], [-x, y, z], 0, 0, 1);
+    face([x, -y, -z], [-x, -y, -z], [-x, y, -z], [x, y, -z], 0, 0, -1);
+    face([x, -y, z], [x, -y, -z], [x, y, -z], [x, y, z], 1, 0, 0);
+    face([-x, -y, -z], [-x, -y, z], [-x, y, z], [-x, y, -z], -1, 0, 0);
+    face([-x, y, z], [x, y, z], [x, y, -z], [-x, y, -z], 0, 1, 0);
+    face([-x, -y, -z], [x, -y, -z], [x, -y, z], [-x, -y, z], 0, -1, 0);
+    return { pos: pos, nor: nor, idx: idx };
+  }
+
+  function makeCylinder(rb, rt, h, seg, caps) {
+    var pos = [], nor = [], idx = [];
+    var hh = h / 2;
+    var sideStart = 0;
+    for (var i = 0; i <= seg; i++) {
+      var a = (i / seg) * Math.PI * 2, ca = Math.cos(a), sa = Math.sin(a);
+      var nx = ca * h, ny = (rb - rt), nz = sa * h;
+      var l = Math.hypot(nx, ny, nz) || 1;
+      nx /= l; ny /= l; nz /= l;
+      pos.push(rb * ca, -hh, rb * sa); nor.push(nx, ny, nz);
+      if (rt > 0) { pos.push(rt * ca, hh, rt * sa); nor.push(nx, ny, nz); }
+      else { pos.push(0, hh, 0); nor.push(0, 1, 0); }
+    }
+    for (var j = 0; j < seg; j++) {
+      var a0 = sideStart + j * 2, b0 = sideStart + (j + 1) * 2;
+      idx.push(a0, a0 + 1, b0, b0, a0 + 1, b0 + 1);
+    }
+    if (caps && rb > 0) {
+      var cIdx = pos.length / 3;
+      pos.push(0, -hh, 0); nor.push(0, -1, 0);
+      var f0 = pos.length / 3;
+      for (var k = 0; k < seg; k++) {
+        var aa = (k / seg) * Math.PI * 2;
+        pos.push(rb * Math.cos(aa), -hh, rb * Math.sin(aa)); nor.push(0, -1, 0);
+      }
+      for (var m = 0; m < seg; m++) idx.push(cIdx, f0 + m, f0 + ((m + 1) % seg));
+    }
+    if (caps && rt > 0) {
+      var tIdx = pos.length / 3;
+      pos.push(0, hh, 0); nor.push(0, 1, 0);
+      var g0 = pos.length / 3;
+      for (var p = 0; p < seg; p++) {
+        var ab = (p / seg) * Math.PI * 2;
+        pos.push(rt * Math.cos(ab), hh, rt * Math.sin(ab)); nor.push(0, 1, 0);
+      }
+      for (var q = 0; q < seg; q++) idx.push(tIdx, g0 + ((q + 1) % seg), g0 + q);
+    }
+    return { pos: pos, nor: nor, idx: idx };
+  }
+
+  function makeSphere(r, seg, rings) {
+    var pos = [], nor = [], idx = [];
+    for (var y = 0; y <= rings; y++) {
+      var phi = (y / rings) * Math.PI;
+      for (var x = 0; x <= seg; x++) {
+        var theta = (x / seg) * Math.PI * 2;
+        var nx = Math.sin(phi) * Math.cos(theta);
+        var ny = Math.cos(phi);
+        var nz = Math.sin(phi) * Math.sin(theta);
+        pos.push(r * nx, r * ny, r * nz);
+        nor.push(nx, ny, nz);
+      }
+    }
+    var rowLen = seg + 1;
+    for (var yy = 0; yy < rings; yy++) {
+      for (var xx = 0; xx < seg; xx++) {
+        var a = yy * rowLen + xx, b = a + 1, c = a + rowLen, d = c + 1;
+        idx.push(a, b, c, b, d, c);
+      }
+    }
+    return { pos: pos, nor: nor, idx: idx };
+  }
+
+  /* ------------------------------------------------------------------ *
+   *  シーンビルダー
+   * ------------------------------------------------------------------ */
+  function Builder() {
+    this.pos = []; this.nor = []; this.col = []; this.wav = []; this.idx = [];
+  }
+  Builder.prototype.add = function (prim, m, color, wave) {
+    var base = this.pos.length / 3;
+    var nm = normalMatrix(m);
+    var p3 = [0, 0, 0], n3 = [0, 0, 0];
+    var n = prim.pos.length / 3;
+    for (var i = 0; i < n; i++) {
+      transformPoint(m, prim.pos[i * 3], prim.pos[i * 3 + 1], prim.pos[i * 3 + 2], p3);
+      this.pos.push(p3[0], p3[1], p3[2]);
+      transformNormal(nm, prim.nor[i * 3], prim.nor[i * 3 + 1], prim.nor[i * 3 + 2], n3);
+      this.nor.push(n3[0], n3[1], n3[2]);
+      this.col.push(color[0], color[1], color[2]);
+      this.wav.push(wave || 0);
+    }
+    for (var j = 0; j < prim.idx.length; j++) this.idx.push(base + prim.idx[j]);
+  };
+
+  var box1 = makeBox(1, 1, 1);
+  var cyl1 = makeCylinder(1, 1, 1, 24, true);
+  var cone1 = makeCylinder(1, 0, 1, 24, true);
+  var pyr1 = makeCylinder(1, 0, 1, 4, true);
+  var sph1 = makeSphere(1, 18, 13);
+
+  var COL = {
+    stone: [0.74, 0.73, 0.71],
+    stone2: [0.62, 0.61, 0.63],
+    stoneDark: [0.44, 0.44, 0.50],
+    roof: [0.16, 0.20, 0.38],
+    roofRed: [0.36, 0.15, 0.17],
+    wood: [0.36, 0.23, 0.13],
+    iron: [0.20, 0.20, 0.24],
+    gold: [0.94, 0.78, 0.30],
+    flag: [0.82, 0.14, 0.20],
+    flag2: [0.20, 0.40, 0.85],
+    grass: [0.26, 0.46, 0.20],
+    grass2: [0.30, 0.44, 0.22],
+    path: [0.58, 0.50, 0.39],
+    leaf: [0.17, 0.42, 0.19],
+    leaf2: [0.24, 0.50, 0.22],
+    trunk: [0.33, 0.23, 0.14],
+    win: [1.0, 0.80, 0.40],
+    dark: [0.05, 0.05, 0.08]
+  };
+
+  /* --- 城のパーツ --------------------------------------------------- */
+  function buildCastle() {
+    var B = new Builder();
+    var HALF = 9, WH = 4.5, WT = 1.0;
+
+    function box(x, y, z, sx, sy, sz, c, ry) { B.add(box1, trs(x, y, z, 0, ry || 0, 0, sx, sy, sz), c, 0); }
+    function cyl(x, y, z, r, h, c) { B.add(cyl1, trs(x, y, z, 0, 0, 0, r, h, r), c, 0); }
+    function cone(x, y, z, r, h, c) { B.add(cone1, trs(x, y, z, 0, 0, 0, r, h, r), c, 0); }
+    function pyr(x, y, z, r, h, c) { B.add(pyr1, trs(x, y, z, 0, Math.PI / 4, 0, r, h, r), c, 0); }
+    function sph(x, y, z, r, c) { B.add(sph1, trs(x, y, z, 0, 0, 0, r, r, r), c, 0); }
+
+    // --- 外壁 ---
+    box(0, WH / 2, -HALF, 2 * HALF, WH, WT, COL.stone);            // 北
+    box(HALF, WH / 2, 0, WT, WH, 2 * HALF, COL.stone);             // 東
+    box(-HALF, WH / 2, 0, WT, WH, 2 * HALF, COL.stone);            // 西
+
+    // 南壁は門の開口部（x:-2..2）をあけて左右に分割
+    box(-5.5, WH / 2, HALF, 7, WH, WT, COL.stone);
+    box(5.5, WH / 2, HALF, 7, WH, WT, COL.stone);
+    // 門の上の梁
+    box(0, 4.0, HALF, 4.6, 1.2, 1.1, COL.stone2);
+
+    // --- 狭間（merlons） ---
+    function merlonsX(x0, x1, z) {
+      for (var x = x0; x <= x1 + 0.001; x += 2) box(x, WH + 0.45, z, 0.9, 0.9, 1.15, COL.stone2);
+    }
+    function merlonsZ(z0, z1, x) {
+      for (var z = z0; z <= z1 + 0.001; z += 2) box(x, WH + 0.45, z, 1.15, 0.9, 0.9, COL.stone2);
+    }
+    merlonsX(-7, 7, -HALF);
+    merlonsX(-7, -5, HALF);
+    merlonsX(5, 7, HALF);
+    merlonsZ(-7, 7, HALF);
+    merlonsZ(-7, 7, -HALF);
+
+    // --- 旗 ---
+    function flag(x, yTop, z, dir, c) {
+      cyl(x, yTop + 1.5, z, 0.09, 3.0, COL.stoneDark);
+      B.add(box1, trs(x + dir * 0.85, yTop + 2.35, z, 0, 0, 0, 1.7, 0.85, 0.06), c, 1);
+    }
+
+    // --- 四隅の円塔 ---
+    var corners = [[-1, -1], [1, -1], [-1, 1], [1, 1]];
+    for (var i = 0; i < corners.length; i++) {
+      var x = corners[i][0] * HALF, z = corners[i][1] * HALF;
+      cyl(x, 4, z, 1.9, 8, COL.stone);
+      cyl(x, 8.1, z, 2.05, 0.4, COL.stone2);          // テラス
+      cone(x, 9.75, z, 2.45, 3.5, COL.roof);
+      sph(x, 11.7, z, 0.36, COL.gold);
+      flag(x, 11.5, z, 1, (i % 2 === 0) ? COL.flag : COL.flag2);
+    }
+
+    // --- 門塔 ---
+    var gt = [[-2.6, HALF], [2.6, HALF]];
+    for (var g = 0; g < gt.length; g++) {
+      cyl(gt[g][0], 3.5, gt[g][1], 1.45, 7, COL.stone);
+      cyl(gt[g][0], 7.1, gt[g][1], 1.58, 0.35, COL.stone2);
+      cone(gt[g][0], 8.5, gt[g][1], 1.95, 3.0, COL.roof);
+      sph(gt[g][0], 10.15, gt[g][1], 0.32, COL.gold);
+      flag(gt[g][0], 10.0, gt[g][1], 1, COL.flag);
+    }
+
+    // --- 門扉とアーチ ---
+    box(0, 1.25, HALF + 0.55, 3.6, 2.5, 0.22, COL.wood);           // 扉
+    box(0, 0.9, HALF + 0.68, 3.7, 0.16, 0.06, COL.iron);           // 鉄帯
+    box(0, 1.9, HALF + 0.68, 3.7, 0.16, 0.06, COL.iron);
+    for (var a = 20; a <= 160; a += 20) {
+      var rad = (a * Math.PI) / 180;
+      var ax = Math.cos(rad) * 1.85;
+      var ay = 1.95 + Math.sin(rad) * 1.85;
+      B.add(box1, trs(ax, ay, HALF + 0.5, 0, 0, rad - Math.PI / 2, 0.46, 0.72, 0.9), COL.stone2, 0);
+    }
+
+    // --- 天守（中央の塔） ---
+    box(0, 1.75, 0, 7, 3.5, 7, COL.stone);
+    pyr(0, 3.5 + 1.1, 0, 5.8, 2.2, COL.roof);
+    box(0, 5.3, 0, 5, 3.0, 5, COL.stone2);
+    pyr(0, 6.8 + 1.0, 0, 4.35, 2.0, COL.roof);
+    box(0, 8.4, 0, 3.2, 2.6, 3.2, COL.stone);
+    pyr(0, 9.7 + 0.9, 0, 2.95, 1.8, COL.roof);
+    sph(0, 11.75, 0, 0.42, COL.gold);
+    cyl(0, 12.5, 0, 0.05, 1.2, COL.gold);
+
+    // 天守の窓
+    var wy = [1.5, 5.3], wr = [3.52, 2.52];
+    for (var t = 0; t < 2; t++) {
+      for (var sx = -1; sx <= 1; sx += 2) {
+        box(sx * 1.6, wy[t], wr[t], 0.7, 1.2, 0.15, COL.win);
+        B.add(box1, trs(wr[t], wy[t], sx * 1.6, 0, Math.PI / 2, 0, 0.7, 1.2, 0.15), COL.win, 0);
+      }
+    }
+
+    // --- 木 ---
+    function tree(x, z, s, type) {
+      cyl(x, 1.6 * s, z, 0.34 * s, 3.2 * s, COL.trunk);
+      if (type === 0) {
+        B.add(sph1, trs(x, 3.7 * s, z, 0, 0, 0, 1.75 * s, 1.55 * s, 1.75 * s), COL.leaf, 0);
+        B.add(sph1, trs(x - 0.75 * s, 3.0 * s, z + 0.35 * s, 0, 0, 0, 1.0 * s, 0.9 * s, 1.0 * s), COL.leaf2, 0);
+        B.add(sph1, trs(x + 0.65 * s, 3.1 * s, z - 0.45 * s, 0, 0, 0, 1.1 * s, 0.95 * s, 1.1 * s), COL.leaf2, 0);
+      } else {
+        B.add(cone1, trs(x, 3.1 * s, z, 0, 0, 0, 1.65 * s, 2.7 * s, 1.65 * s), COL.leaf, 0);
+        B.add(cone1, trs(x, 4.4 * s, z, 0, 0, 0, 1.3 * s, 2.3 * s, 1.3 * s), COL.leaf, 0);
+        B.add(cone1, trs(x, 5.6 * s, z, 0, 0, 0, 0.9 * s, 1.9 * s, 0.9 * s), COL.leaf2, 0);
+      }
+    }
+    tree(-15, 3, 1.2, 0); tree(15, -5, 1.0, 1); tree(-13.5, -13, 1.35, 1);
+    tree(16, 12, 1.1, 0); tree(11, 16, 0.95, 1); tree(-17, 15, 1.25, 0);
+    tree(13, 17, 1.05, 1); tree(-16, -6, 1.15, 0); tree(18, -14, 1.2, 1);
+
+    // --- 岩 ---
+    B.add(sph1, trs(-8.5, 0.35, 13.5, 0, 0, 0, 1.25, 0.85, 1.05), COL.stoneDark, 0);
+    B.add(sph1, trs(9.5, 0.3, 13.8, 0, 0, 0, 0.95, 0.7, 0.85), COL.stoneDark, 0);
+    B.add(sph1, trs(-12, 0.28, 10, 0, 0, 0, 0.8, 0.6, 0.9), COL.stoneDark, 0);
+
+    return B;
+  }
+
+  /* --- 地面 --------------------------------------------------------- */
+  function buildGround() {
+    var G = new Builder();
+    G.add(box1, trs(0, -1, 0, 0, 0, 0, 180, 2, 180), COL.grass, 0);
+    G.add(box1, trs(0, 0.01, 0, 0, 0, 0, 22, 0.06, 22), COL.grass2, 0);
+    G.add(box1, trs(0, 0.03, 20, 0, 0, 0, 4.4, 0.06, 24), COL.path, 0);
+    return G;
+  }
+
+  /* ------------------------------------------------------------------ *
+   *  バッファ作成
+   * ------------------------------------------------------------------ */
+  function makeBuf(target, data) {
+    var b = gl.createBuffer();
+    gl.bindBuffer(target, b);
+    gl.bufferData(target, data, gl.STATIC_DRAW);
+    return b;
+  }
+  function uploadMesh(builder) {
+    var pos = new Float32Array(builder.pos);
+    var nor = new Float32Array(builder.nor);
+    var col = new Float32Array(builder.col);
+    var wav = new Float32Array(builder.wav);
+    var idx = new Uint16Array(builder.idx);
+    var lines = [];
+    for (var i = 0; i < idx.length; i += 3) {
+      lines.push(idx[i], idx[i + 1], idx[i + 1], idx[i + 2], idx[i + 2], idx[i]);
+    }
+    var lineArr = new Uint16Array(lines);
+    return {
+      posBuf: makeBuf(gl.ARRAY_BUFFER, pos),
+      norBuf: makeBuf(gl.ARRAY_BUFFER, nor),
+      colBuf: makeBuf(gl.ARRAY_BUFFER, col),
+      wavBuf: makeBuf(gl.ARRAY_BUFFER, wav),
+      idxBuf: makeBuf(gl.ELEMENT_ARRAY_BUFFER, idx),
+      lineBuf: makeBuf(gl.ELEMENT_ARRAY_BUFFER, lineArr),
+      idxCount: idx.length,
+      lineCount: lineArr.length,
+      vertexCount: pos.length / 3,
+      triCount: idx.length / 3
+    };
+  }
+
+  var castleBuilder = buildCastle();
+  var groundBuilder = buildGround();
+  var castleMesh = uploadMesh(castleBuilder);
+  var groundMesh = uploadMesh(groundBuilder);
+
+  var totalVerts = castleMesh.vertexCount + groundMesh.vertexCount;
+  var totalTris = castleMesh.triCount + groundMesh.triCount;
+
+  /* ------------------------------------------------------------------ *
+   *  シェーダ
+   * ------------------------------------------------------------------ */
+  var VS_MAIN = [
+    "precision highp float;",
+    "attribute vec3 aPos;",
+    "attribute vec3 aNormal;",
+    "attribute vec3 aColor;",
+    "attribute float aWave;",
+    "uniform mat4 uVP;",
+    "uniform highp vec3 uLightDir;",
+    "uniform highp float uShadow;",
+    "uniform float uTime;",
+    "uniform float uWaveAmp;",
+    "varying highp vec3 vNormal;",
+    "varying highp vec3 vWorld;",
+    "varying highp vec3 vColor;",
+    "void main() {",
+    "  vec3 wp = aPos;",
+    "  if (uShadow > 0.5) {",
+    "    float t = aPos.y / max(uLightDir.y, 0.001);",
+    "    wp = vec3(aPos.x - t * uLightDir.x, 0.08, aPos.z - t * uLightDir.z);",
+    "  } else if (uWaveAmp > 0.0 && aWave > 0.5) {",
+    "    wp.x += sin(uTime * 4.0 + aPos.x * 1.6 + aPos.y * 0.8 + aPos.z * 1.2) * 0.22;",
+    "    wp.z += cos(uTime * 3.4 + aPos.x * 1.1 + aPos.y * 0.6) * 0.14;",
+    "  }",
+    "  vWorld = wp;",
+    "  vNormal = aNormal;",
+    "  vColor = aColor;",
+    "  gl_Position = uVP * vec4(wp, 1.0);",
+    "}"
+  ].join("\n");
+
+  var FS_MAIN = [
+    "#ifdef GL_FRAGMENT_PRECISION_HIGH",
+    "precision highp float;",
+    "#else",
+    "precision mediump float;",
+    "#endif",
+    "varying highp vec3 vNormal;",
+    "varying highp vec3 vWorld;",
+    "varying highp vec3 vColor;",
+    "uniform vec3 uCamPos;",
+    "uniform highp vec3 uLightDir;",
+    "uniform vec3 uLightColor;",
+    "uniform vec3 uAmbient;",
+    "uniform vec3 uWireColor;",
+    "uniform float uSpec;",
+    "uniform highp float uShadow;",
+    "uniform float uShadowAlpha;",
+    "uniform float uWire;",
+    "void main() {",
+    "  if (uWire > 0.5) { gl_FragColor = vec4(uWireColor, 1.0); return; }",
+    "  if (uShadow > 0.5) { gl_FragColor = vec4(0.02, 0.02, 0.05, uShadowAlpha); return; }",
+    "  vec3 N = normalize(vNormal);",
+    "  vec3 L = normalize(uLightDir);",
+    "  vec3 V = normalize(uCamPos - vWorld);",
+    "  float diff = max(dot(N, L), 0.0);",
+    "  vec3 H = normalize(L + V);",
+    "  float spec = pow(max(dot(N, H), 0.0), 40.0) * uSpec;",
+    "  float hemi = 0.5 + 0.5 * N.y;",
+    "  vec3 amb = uAmbient * (0.7 + 0.5 * hemi);",
+    "  vec3 col = vColor * (amb + uLightColor * diff) + uLightColor * spec;",
+    "  col = pow(col, vec3(0.9));",
+    "  gl_FragColor = vec4(col, 1.0);",
+    "}"
+  ].join("\n");
+
+  var VS_SKY = [
+    "precision highp float;",
+    "attribute vec2 aPos;",
+    "varying highp vec2 vUv;",
+    "void main() {",
+    "  vUv = aPos * 0.5 + 0.5;",
+    "  gl_Position = vec4(aPos, 0.0, 1.0);",
+    "}"
+  ].join("\n");
+
+  var FS_SKY = [
+    "#ifdef GL_FRAGMENT_PRECISION_HIGH",
+    "precision highp float;",
+    "#else",
+    "precision mediump float;",
+    "#endif",
+    "varying highp vec2 vUv;",
+    "uniform vec3 uTop;",
+    "uniform vec3 uBot;",
+    "uniform vec3 uSun;",
+    "uniform vec2 uSunPos;",
+    "uniform float uStars;",
+    "float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }",
+    "void main() {",
+    "  float t = clamp(vUv.y, 0.0, 1.0);",
+    "  vec3 col = mix(uBot, uTop, pow(t, 0.75));",
+    "  float d = distance(vUv, uSunPos);",
+    "  col += uSun * exp(-d * d * 26.0) * 1.15;",
+    "  if (uStars > 0.5) {",
+    "    vec2 g = floor(vUv * vec2(220.0, 140.0));",
+    "    float h = hash(g);",
+    "    float star = smoothstep(0.9975, 1.0, h) * smoothstep(0.5, 0.95, vUv.y);",
+    "    col += vec3(star) * 0.9;",
+    "  }",
+    "  gl_FragColor = vec4(col, 1.0);",
+    "}"
+  ].join("\n");
+
+  function compile(type, src) {
+    var s = gl.createShader(type);
+    gl.shaderSource(s, src);
+    gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+      var log = gl.getShaderInfoLog(s);
+      gl.deleteShader(s);
+      throw new Error("Shader compile error: " + log);
+    }
+    return s;
+  }
+
+  function createProgram(vsSrc, fsSrc, attribs) {
+    var prog = gl.createProgram();
+    var vs = compile(gl.VERTEX_SHADER, vsSrc);
+    var fs = compile(gl.FRAGMENT_SHADER, fsSrc);
+    gl.attachShader(prog, vs);
+    gl.attachShader(prog, fs);
+    for (var name in attribs) gl.bindAttribLocation(prog, attribs[name], name);
+    gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+      var log = gl.getProgramInfoLog(prog);
+      throw new Error("Program link error: " + log);
+    }
+    gl.deleteShader(vs);
+    gl.deleteShader(fs);
+    return prog;
+  }
+
+  var mainProg, skyProg, u, su;
+  try {
+    mainProg = createProgram(VS_MAIN, FS_MAIN, { aPos: 0, aNormal: 1, aColor: 2, aWave: 3 });
+    skyProg = createProgram(VS_SKY, FS_SKY, { aPos: 0 });
+  } catch (e) {
+    showError("グラフィックスの初期化に失敗しました。（" + (e && e.message ? e.message : "不明なエラー") + "）");
+    return;
+  }
+
+  u = {
+    uVP: gl.getUniformLocation(mainProg, "uVP"),
+    uCamPos: gl.getUniformLocation(mainProg, "uCamPos"),
+    uLightDir: gl.getUniformLocation(mainProg, "uLightDir"),
+    uLightColor: gl.getUniformLocation(mainProg, "uLightColor"),
+    uAmbient: gl.getUniformLocation(mainProg, "uAmbient"),
+    uSpec: gl.getUniformLocation(mainProg, "uSpec"),
+    uShadow: gl.getUniformLocation(mainProg, "uShadow"),
+    uShadowAlpha: gl.getUniformLocation(mainProg, "uShadowAlpha"),
+    uWire: gl.getUniformLocation(mainProg, "uWire"),
+    uWireColor: gl.getUniformLocation(mainProg, "uWireColor"),
+    uTime: gl.getUniformLocation(mainProg, "uTime"),
+    uWaveAmp: gl.getUniformLocation(mainProg, "uWaveAmp")
+  };
+  su = {
+    uTop: gl.getUniformLocation(skyProg, "uTop"),
+    uBot: gl.getUniformLocation(skyProg, "uBot"),
+    uSun: gl.getUniformLocation(skyProg, "uSun"),
+    uSunPos: gl.getUniformLocation(skyProg, "uSunPos"),
+    uStars: gl.getUniformLocation(skyProg, "uStars")
+  };
+
+  // 空（フルスクリーンクワッド）
+  var skyBuf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, skyBuf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+
+  /* ------------------------------------------------------------------ *
+   *  ライティングプリセット
+   * ------------------------------------------------------------------ */
+  function norm3(v) {
+    var l = Math.hypot(v[0], v[1], v[2]) || 1;
+    return [v[0] / l, v[1] / l, v[2] / l];
+  }
+
+  var PRESETS = [
+    {
+      name: "昼", dir: [0.55, 0.72, 0.42], light: [1.0, 0.97, 0.90], amb: [0.34, 0.37, 0.44],
+      spec: 0.30, top: [0.30, 0.54, 0.90], bot: [0.85, 0.92, 1.0], sun: [1.0, 0.96, 0.82], stars: 0, shadow: 0.32
+    },
+    {
+      name: "夕方", dir: [-0.62, 0.34, 0.30], light: [1.0, 0.55, 0.28], amb: [0.32, 0.25, 0.30],
+      spec: 0.50, top: [0.18, 0.20, 0.42], bot: [1.0, 0.55, 0.30], sun: [1.0, 0.62, 0.30], stars: 0, shadow: 0.36
+    },
+    {
+      name: "夜", dir: [0.25, 0.55, -0.50], light: [0.35, 0.45, 0.82], amb: [0.10, 0.12, 0.22],
+      spec: 0.70, top: [0.02, 0.03, 0.09], bot: [0.06, 0.09, 0.20], sun: [0.30, 0.35, 0.62], stars: 1, shadow: 0.22
+    }
+  ];
+  var lightIndex = 0;
+  var LI = PRESETS[0];
+
+  /* ------------------------------------------------------------------ *
+   *  カメラ / 状態
+   * ------------------------------------------------------------------ */
+  var DEF = { yaw: 0.72, pitch: 0.42, distance: 62, target: [0, 6, 0] };
+  var state = {
+    yaw: DEF.yaw, pitch: DEF.pitch, distance: DEF.distance, target: DEF.target.slice(),
+    autoRotate: true, wireframe: false
+  };
+
+  var W = 1, H = 1;
+
+  function resize() {
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var w = canvas.clientWidth || window.innerWidth;
+    var h = canvas.clientHeight || window.innerHeight;
+    var nw = Math.max(1, Math.floor(w * dpr));
+    var nh = Math.max(1, Math.floor(h * dpr));
+    if (canvas.width !== nw || canvas.height !== nh) {
+      canvas.width = nw;
+      canvas.height = nh;
+    }
+    W = canvas.width; H = canvas.height;
+  }
+
+  function getEye() {
+    var cp = Math.cos(state.pitch);
+    return [
+      state.target[0] + state.distance * cp * Math.sin(state.yaw),
+      state.target[1] + state.distance * Math.sin(state.pitch),
+      state.target[2] + state.distance * cp * Math.cos(state.yaw)
+    ];
+  }
+
+  function pan(dx, dy) {
+    var eye = getEye();
+    var fx = state.target[0] - eye[0], fy = state.target[1] - eye[1], fz = state.target[2] - eye[2];
+    var fl = Math.hypot(fx, fy, fz) || 1; fx /= fl; fy /= fl; fz /= fl;
+    var rx = fy * 0 - fz * 1, ry = fz * 0 - fx * 0, rz = fx * 1 - fy * 0; // cross(f, worldUp)
+    var rl = Math.hypot(rx, ry, rz) || 1; rx /= rl; ry /= rl; rz /= rl;
+    var ux = ry * fz - rz * fy, uy = rz * fx - rx * fz, uz = rx * fy - ry * fx; // cross(right, forward)
+    var k = state.distance * 0.0016;
+    state.target[0] += rx * (-dx * k) + ux * (dy * k);
+    state.target[1] += ry * (-dx * k) + uy * (dy * k);
+    state.target[2] += rz * (-dx * k) + uz * (dy * k);
+  }
+
+  function resetView() {
+    state.yaw = DEF.yaw; state.pitch = DEF.pitch; state.distance = DEF.distance;
+    state.target = DEF.target.slice();
+  }
+
+  /* ------------------------------------------------------------------ *
+   *  入力（PointerEvents）
+   * ------------------------------------------------------------------ */
+  var pointers = {};
+  var pointerCount = 0;
+  var last2 = null;
+  var lastTapTime = 0, lastTapX = 0, lastTapY = 0;
+
+  function twoInfo() {
+    var ids = Object.keys(pointers);
+    var a = pointers[ids[0]], b = pointers[ids[1]];
+    return { dist: Math.hypot(a.x - b.x, a.y - b.y), cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2 };
+  }
+
+  canvas.addEventListener("pointerdown", function (e) {
+    try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* noop */ }
+    pointers[e.pointerId] = {
+      x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, t0: performance.now(),
+      moved: false, pan: (e.button === 2 || e.button === 1), type: e.pointerType
+    };
+    pointerCount++;
+    canvas.classList.add("dragging");
+    if (pointerCount === 2 && !last2) last2 = twoInfo();
+  });
+
+  canvas.addEventListener("pointermove", function (e) {
+    var p = pointers[e.pointerId];
+    if (!p) return;
+    if (Math.hypot(e.clientX - p.sx, e.clientY - p.sy) > 10) p.moved = true;
+
+    if (pointerCount >= 2) {
+      p.x = e.clientX; p.y = e.clientY;
+      var now = twoInfo();
+      if (last2) {
+        if (now.dist > 4 && last2.dist > 4) {
+          state.distance *= last2.dist / now.dist;
+        }
+        pan(now.cx - last2.cx, now.cy - last2.cy);
+      }
+      last2 = now;
+      return;
+    }
+
+    var dx = e.clientX - p.x, dy = e.clientY - p.y;
+    p.x = e.clientX; p.y = e.clientY;
+    if (p.pan) {
+      pan(dx, dy);
+    } else {
+      state.yaw -= dx * 0.008;
+      state.pitch -= dy * 0.006;
+      var lim = 1.35;
+      if (state.pitch > lim) state.pitch = lim;
+      if (state.pitch < -lim) state.pitch = -lim;
+    }
+  });
+
+  function endPointer(e) {
+    var p = pointers[e.pointerId];
+    if (!p) return;
+    delete pointers[e.pointerId];
+    pointerCount = Math.max(0, pointerCount - 1);
+    if (pointerCount < 2) last2 = null;
+    if (pointerCount === 0) canvas.classList.remove("dragging");
+
+    // ダブルタップ判定（タッチ）: 単指・短時間・ほぼ動いていない場合のみ
+    if (e.pointerType === "touch" && pointerCount === 0 && !p.moved && (performance.now() - p.t0) < 300) {
+      var t = performance.now();
+      if (t - lastTapTime < 320 && Math.hypot(e.clientX - lastTapX, e.clientY - lastTapY) < 40) {
+        resetView();
+        lastTapTime = 0;
+      } else {
+        lastTapTime = t; lastTapX = e.clientX; lastTapY = e.clientY;
+      }
+    }
+  }
+  canvas.addEventListener("pointerup", endPointer);
+  canvas.addEventListener("pointercancel", endPointer);
+
+  canvas.addEventListener("dblclick", function (e) { e.preventDefault(); resetView(); });
+  canvas.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+
+  canvas.addEventListener("wheel", function (e) {
+    e.preventDefault();
+    state.distance *= Math.exp(e.deltaY * 0.0012);
+    if (state.distance < 8) state.distance = 8;
+    if (state.distance > 320) state.distance = 320;
+  }, { passive: false });
+
+  /* ------------------------------------------------------------------ *
+   *  UI
+   * ------------------------------------------------------------------ */
+  var btnAuto = document.getElementById("btnAuto");
+  var btnWire = document.getElementById("btnWire");
+  var btnLight = document.getElementById("btnLight");
+  var btnReset = document.getElementById("btnReset");
+  var statVerts = document.getElementById("statVerts");
+  var statTris = document.getElementById("statTris");
+  var statFps = document.getElementById("statFps");
+
+  statVerts.textContent = totalVerts.toLocaleString("ja-JP");
+  statTris.textContent = totalTris.toLocaleString("ja-JP");
+
+  function applyPreset(i) {
+    lightIndex = ((i % PRESETS.length) + PRESETS.length) % PRESETS.length;
+    LI = PRESETS[lightIndex];
+    LI._dir = norm3(LI.dir);
+    btnLight.textContent = "ライティング: " + LI.name;
+    var c = LI.bot;
+    gl.clearColor(c[0], c[1], c[2], 1);
+  }
+
+  btnAuto.addEventListener("click", function () {
+    state.autoRotate = !state.autoRotate;
+    btnAuto.textContent = "自動回転: " + (state.autoRotate ? "ON" : "OFF");
+    btnAuto.classList.toggle("on", state.autoRotate);
+  });
+  btnWire.addEventListener("click", function () {
+    state.wireframe = !state.wireframe;
+    btnWire.textContent = "ワイヤーフレーム: " + (state.wireframe ? "ON" : "OFF");
+    btnWire.classList.toggle("on", state.wireframe);
+  });
+  btnLight.addEventListener("click", function () { applyPreset(lightIndex + 1); });
+  btnReset.addEventListener("click", resetView);
+
+  applyPreset(0);
+
+  /* ------------------------------------------------------------------ *
+   *  描画
+   * ------------------------------------------------------------------ */
+  function bindMesh(mesh) {
+    gl.bindBuffer(gl.ARRAY_BUFFER, mesh.posBuf); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
+    gl.bindBuffer(gl.ARRAY_BUFFER, mesh.norBuf); gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 0, 0);
+    gl.bindBuffer(gl.ARRAY_BUFFER, mesh.colBuf); gl.vertexAttribPointer(2, 3, gl.FLOAT, false, 0, 0);
+    gl.bindBuffer(gl.ARRAY_BUFFER, mesh.wavBuf); gl.vertexAttribPointer(3, 1, gl.FLOAT, false, 0, 0);
+  }
+  function drawTris(mesh) {
+    bindMesh(mesh);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, mesh.idxBuf);
+    gl.drawElements(gl.TRIANGLES, mesh.idxCount, gl.UNSIGNED_SHORT, 0);
+  }
+  function drawLines(mesh) {
+    bindMesh(mesh);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, mesh.lineBuf);
+    gl.drawElements(gl.LINES, mesh.lineCount, gl.UNSIGNED_SHORT, 0);
+  }
+
+  var WIRE_COLOR = [0.72, 0.92, 1.0];
+
+  function drawSky() {
+    gl.useProgram(skyProg);
+    gl.bindBuffer(gl.ARRAY_BUFFER, skyBuf);
+    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(0);
+    gl.disableVertexAttribArray(1);
+    gl.disableVertexAttribArray(2);
+    gl.disableVertexAttribArray(3);
+    gl.uniform3fv(su.uTop, LI.top);
+    gl.uniform3fv(su.uBot, LI.bot);
+    gl.uniform3fv(su.uSun, LI.sun);
+    var d = LI._dir;
+    gl.uniform2f(su.uSunPos, 0.5 + d[0] * 0.42, 0.14 + Math.max(d[1], 0) * 0.72);
+    gl.uniform1f(su.uStars, LI.stars);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  }
+
+  function render(time, dt) {
+    resize();
+    var aspect = W / H;
+    if (state.autoRotate) state.yaw += dt * 0.35;
+    var eye = getEye();
+    var view = lookAt(eye, state.target, [0, 1, 0]);
+    var proj = perspective(45 * Math.PI / 180, aspect, 0.5, 800);
+    var vp = multiply(proj, view);
+
+    gl.viewport(0, 0, W, H);
+    gl.clearColor(LI.bot[0], LI.bot[1], LI.bot[2], 1);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+    // 空
+    gl.disable(gl.DEPTH_TEST);
+    gl.depthMask(false);
+    drawSky();
+
+    gl.enable(gl.DEPTH_TEST);
+    gl.depthFunc(gl.LEQUAL);
+    gl.depthMask(true);
+
+    gl.useProgram(mainProg);
+    gl.enableVertexAttribArray(0);
+    gl.enableVertexAttribArray(1);
+    gl.enableVertexAttribArray(2);
+    gl.enableVertexAttribArray(3);
+    gl.uniformMatrix4fv(u.uVP, false, vp);
+    gl.uniform3fv(u.uCamPos, eye);
+    gl.uniform3fv(u.uLightDir, LI._dir);
+    gl.uniform3fv(u.uLightColor, LI.light);
+    gl.uniform3fv(u.uAmbient, LI.amb);
+    gl.uniform1f(u.uSpec, LI.spec);
+    gl.uniform3fv(u.uWireColor, WIRE_COLOR);
+    gl.uniform1f(u.uTime, time);
+
+    if (state.wireframe) {
+      gl.uniform1f(u.uWire, 1);
+      gl.uniform1f(u.uShadow, 0);
+      gl.uniform1f(u.uWaveAmp, 0);
+      gl.disable(gl.CULL_FACE);
+      drawLines(groundMesh);
+      drawLines(castleMesh);
+    } else {
+      gl.uniform1f(u.uWire, 0);
+      gl.uniform1f(u.uShadow, 0);
+      gl.uniform1f(u.uWaveAmp, 1);
+      gl.enable(gl.CULL_FACE);
+      gl.cullFace(gl.BACK);
+      gl.disable(gl.BLEND);
+      drawTris(groundMesh);
+      drawTris(castleMesh);
+
+      // 簡易シャドウ（地面へ投影）
+      gl.uniform1f(u.uShadow, 1);
+      gl.uniform1f(u.uWaveAmp, 0);
+      gl.uniform1f(u.uShadowAlpha, LI.shadow);
+      gl.disable(gl.CULL_FACE);
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+      gl.depthMask(false);
+      drawTris(castleMesh);
+      gl.depthMask(true);
+      gl.disable(gl.BLEND);
+    }
+  }
+
+  /* ------------------------------------------------------------------ *
+   *  ループ & FPS
+   * ------------------------------------------------------------------ */
+  var lastT = performance.now();
+  var fpsAccum = 0, fpsFrames = 0;
+
+  function loop(now) {
+    var dt = (now - lastT) / 1000;
+    lastT = now;
+    if (!(dt > 0)) dt = 0.016;
+    if (dt > 0.1) dt = 0.1;
+
+    render(now / 1000, dt);
+
+    fpsAccum += dt; fpsFrames++;
+    if (fpsAccum >= 0.5) {
+      statFps.textContent = Math.round(fpsFrames / fpsAccum);
+      fpsAccum = 0; fpsFrames = 0;
+    }
+    requestAnimationFrame(loop);
+  }
+
+  window.addEventListener("resize", resize);
+  window.addEventListener("orientationchange", resize);
+  resize();
+  requestAnimationFrame(loop);
+
+  /* ------------------------------------------------------------------ *
+   *  デバッグ公開
+   * ------------------------------------------------------------------ */
+  window.__viewer = {
+    get yaw() { return state.yaw; },
+    set yaw(v) { state.yaw = v; },
+    get pitch() { return state.pitch; },
+    set pitch(v) { state.pitch = v; },
+    get distance() { return state.distance; },
+    set distance(v) { state.distance = v; },
+    get target() { return state.target.slice(); },
+    get triangles() { return totalTris; },
+    get vertices() { return totalVerts; },
+    get wireframe() { return state.wireframe; },
+    set wireframe(v) { state.wireframe = !!v; btnWire.textContent = "ワイヤーフレーム: " + (state.wireframe ? "ON" : "OFF"); btnWire.classList.toggle("on", state.wireframe); },
+    get autoRotate() { return state.autoRotate; },
+    set autoRotate(v) { state.autoRotate = !!v; btnAuto.textContent = "自動回転: " + (state.autoRotate ? "ON" : "OFF"); btnAuto.classList.toggle("on", state.autoRotate); },
+    get lightIndex() { return lightIndex; },
+    reset: resetView,
+    setLighting: applyPreset
+  };
+})();
+</script>
+</body>
+</html>

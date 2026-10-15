@@ -1,0 +1,1142 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#0d1117">
+<title>迷路生成 & 経路探索 ビジュアライザ</title>
+<style>
+  :root{
+    --bg:#0d1117;
+    --panel:#161b22;
+    --panel2:#1c2430;
+    --border:#30363d;
+    --text:#e6edf3;
+    --muted:#8b949e;
+    --accent:#58a6ff;
+    --accent2:#3fb950;
+    --danger:#f85149;
+    --warn:#d29922;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:radial-gradient(1200px 600px at 50% -10%, #172033 0%, var(--bg) 60%);
+    color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Hiragino Sans","Yu Gothic UI","Meiryo",system-ui,sans-serif;
+    font-size:14px;
+    line-height:1.5;
+    -webkit-text-size-adjust:100%;
+    overscroll-behavior:none;
+    padding:12px 12px calc(24px + env(safe-area-inset-bottom));
+  }
+  h1{
+    font-size:18px;
+    margin:4px 0 2px;
+    letter-spacing:.02em;
+    display:flex;align-items:center;gap:8px;
+  }
+  h1 .dot{width:10px;height:10px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2));box-shadow:0 0 12px rgba(88,166,255,.7);}
+  .sub{color:var(--muted);font-size:12px;margin:0 0 12px;}
+  #app{max-width:600px;margin:0 auto;}
+  .panel{
+    background:linear-gradient(180deg,var(--panel2),var(--panel));
+    border:1px solid var(--border);
+    border-radius:14px;
+    padding:12px;
+    margin-bottom:12px;
+    box-shadow:0 6px 24px rgba(0,0,0,.35);
+  }
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;}
+  .field{display:flex;flex-direction:column;gap:4px;flex:1 1 120px;min-width:110px;}
+  .field label{font-size:11px;color:var(--muted);}
+  select,input[type="number"]{
+    width:100%;
+    background:#0b0f14;
+    color:var(--text);
+    border:1px solid var(--border);
+    border-radius:9px;
+    padding:8px 9px;
+    font-size:14px;
+    font-family:inherit;
+    appearance:none;
+  }
+  input[type="range"]{
+    width:100%;
+    -webkit-appearance:none;appearance:none;
+    height:26px;background:transparent;
+  }
+  input[type="range"]::-webkit-slider-runnable-track{
+    height:6px;border-radius:3px;background:#0b0f14;border:1px solid var(--border);
+  }
+  input[type="range"]::-webkit-slider-thumb{
+    -webkit-appearance:none;appearance:none;
+    width:20px;height:20px;border-radius:50%;
+    background:linear-gradient(135deg,var(--accent),#1f6feb);
+    border:2px solid #0b0f14;margin-top:-8px;box-shadow:0 0 8px rgba(88,166,255,.6);
+  }
+  input[type="range"]::-moz-range-track{height:6px;border-radius:3px;background:#0b0f14;border:1px solid var(--border);}
+  input[type="range"]::-moz-range-thumb{width:18px;height:18px;border:2px solid #0b0f14;border-radius:50%;background:var(--accent);}
+  .range-head{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);}
+  .range-head b{color:var(--accent);font-weight:600;}
+  button{
+    font-family:inherit;
+    font-size:14px;
+    font-weight:600;
+    color:var(--text);
+    background:#21262d;
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:9px 14px;
+    cursor:pointer;
+    transition:transform .06s ease, background .15s ease, border-color .15s ease;
+    -webkit-user-select:none;user-select:none;
+    touch-action:manipulation;
+  }
+  button:active{transform:scale(.97);}
+  button:disabled{opacity:.4;cursor:default;}
+  button.primary{background:linear-gradient(135deg,#1f6feb,#388bfd);border-color:#388bfd;}
+  button.green{background:linear-gradient(135deg,#238636,#2ea043);border-color:#2ea043;}
+  button.warn{background:linear-gradient(135deg,#9e6a03,#bb8009);border-color:#bb8009;}
+  button.ghost{background:transparent;}
+  .btns{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;}
+  .btns .wide{grid-column:1 / -1;}
+  .checks{display:flex;flex-wrap:wrap;gap:14px;margin-top:10px;font-size:13px;}
+  .check{display:flex;align-items:center;gap:7px;cursor:pointer;-webkit-user-select:none;user-select:none;}
+  .check input{width:18px;height:18px;accent-color:#388bfd;}
+  .canvas-wrap{
+    position:relative;
+    max-width:560px;
+    margin:0 auto 12px;
+    border-radius:14px;
+    overflow:hidden;
+    border:1px solid var(--border);
+    box-shadow:0 8px 30px rgba(0,0,0,.5), inset 0 0 0 1px rgba(255,255,255,.02);
+    background:#05080c;
+  }
+  canvas{
+    display:block;
+    width:100%;
+    aspect-ratio:1 / 1;
+    height:auto;
+    touch-action:none;
+    -webkit-user-select:none;user-select:none;
+    -webkit-touch-callout:none;
+    cursor:crosshair;
+  }
+  .legend{display:flex;flex-wrap:wrap;gap:12px;font-size:12px;color:var(--muted);margin-top:2px;}
+  .legend span{display:inline-flex;align-items:center;gap:6px;}
+  .sw{width:12px;height:12px;border-radius:3px;display:inline-block;border:1px solid rgba(255,255,255,.12);}
+  .stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px;}
+  .stat{background:#0b0f14;border:1px solid var(--border);border-radius:10px;padding:8px 10px;}
+  .stat .k{display:block;font-size:11px;color:var(--muted);}
+  .stat .v{display:block;font-size:16px;font-weight:700;font-variant-numeric:tabular-nums;}
+  .phase{color:var(--accent);font-size:13px;font-weight:600;}
+  table{width:100%;border-collapse:collapse;margin-top:8px;font-size:13px;font-variant-numeric:tabular-nums;}
+  th,td{padding:7px 6px;text-align:right;border-bottom:1px solid var(--border);}
+  th:first-child,td:first-child{text-align:left;}
+  thead th{color:var(--muted);font-weight:600;font-size:11px;}
+  tbody tr:last-child td{border-bottom:none;}
+  .note{margin-top:10px;font-size:12.5px;padding:9px 10px;border-radius:10px;border:1px solid var(--border);background:#0b0f14;line-height:1.55;}
+  .note.ok{border-color:#2ea043;background:rgba(46,160,67,.12);}
+  .note.info{border-color:#bb8009;background:rgba(187,128,9,.12);}
+  .hint{font-size:12px;color:var(--muted);margin-top:8px;}
+  [hidden]{display:none !important;}
+  @media (max-width:380px){
+    body{font-size:13px;padding:8px;}
+    .stat .v{font-size:14px;}
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <h1><span class="dot"></span>迷路生成 & 経路探索 ビジュアライザ</h1>
+  <p class="sub">再帰バックトラッカー / Kruskal / Prim / Wilson / Eller と、BFS / DFS / ダイクストラ / A* を可視化します。</p>
+
+  <section class="panel">
+    <div class="row">
+      <div class="field">
+        <label for="genSelect">生成アルゴリズム</label>
+        <select id="genSelect">
+          <option value="backtracker">再帰バックトラッカー</option>
+          <option value="kruskal">ランダム化 Kruskal</option>
+          <option value="prim">ランダム化 Prim</option>
+          <option value="wilson">Wilson</option>
+          <option value="eller">Eller</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="solveSelect">探索アルゴリズム</label>
+        <select id="solveSelect">
+          <option value="bfs">BFS（幅優先）</option>
+          <option value="dfs">DFS（深さ優先）</option>
+          <option value="dijkstra">ダイクストラ</option>
+          <option value="astar">A*（マンハッタン）</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:10px;">
+      <div class="field" style="flex:1 1 100%;">
+        <div class="range-head"><span>迷路サイズ</span><b id="sizeVal">21 × 21</b></div>
+        <input id="sizeRange" type="range" min="10" max="80" step="1" value="21">
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:6px;">
+      <div class="field" style="flex:1 1 100%;">
+        <div class="range-head"><span>アニメーション速度</span><b id="speedVal">6</b></div>
+        <input id="speedRange" type="range" min="1" max="10" step="1" value="6">
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:6px;">
+      <div class="field">
+        <label for="seedInput">乱数シード（再現用）</label>
+        <input id="seedInput" type="number" inputmode="numeric" value="12345">
+      </div>
+      <div class="field" style="flex:0 0 auto;min-width:0;">
+        <label>&nbsp;</label>
+        <button id="btnSeed" class="ghost" type="button">🎲 ランダム</button>
+      </div>
+    </div>
+
+    <div class="checks">
+      <label class="check"><input id="swampToggle" type="checkbox"> 沼地（重み）を使う</label>
+      <label class="check"><input id="wallEdit" type="checkbox" checked> 壁をタップで編集</label>
+    </div>
+
+    <div class="btns">
+      <button id="btnGen" class="primary" type="button">▶ 迷路を生成</button>
+      <button id="btnSolve" class="green" type="button">🔎 経路を探索</button>
+      <button id="btnCompare" class="warn wide" type="button">📊 全アルゴリズム比較</button>
+      <button id="btnStop" class="ghost" type="button" disabled>■ 停止</button>
+      <button id="btnClear" class="ghost" type="button">🧹 探索結果をクリア</button>
+    </div>
+    <p class="hint">スタート（緑）/ ゴール（赤）はドラッグで移動、壁はタップ / ドラッグで編集できます。</p>
+  </section>
+
+  <div class="canvas-wrap">
+    <canvas id="cv"></canvas>
+  </div>
+
+  <section class="panel">
+    <div class="legend">
+      <span><i class="sw" style="background:#3fb950"></i>スタート</span>
+      <span><i class="sw" style="background:#f85149"></i>ゴール</span>
+      <span><i class="sw" style="background:rgba(88,166,255,.45)"></i>訪問済み</span>
+      <span><i class="sw" style="background:rgba(210,153,34,.8)"></i>フロンティア</span>
+      <span><i class="sw" style="background:rgba(63,185,80,.9)"></i>最短経路</span>
+      <span><i class="sw" style="background:rgba(139,90,43,.5)"></i>沼地</span>
+    </div>
+    <div class="stats">
+      <div class="stat"><span class="k">アルゴリズム</span><span class="v" id="stAlgo">—</span></div>
+      <div class="stat"><span class="k">訪問セル数</span><span class="v" id="stVisited">—</span></div>
+      <div class="stat"><span class="k">経路長（セル）</span><span class="v" id="stLen">—</span></div>
+      <div class="stat"><span class="k">所要ステップ</span><span class="v" id="stSteps">—</span></div>
+      <div class="stat"><span class="k">総コスト</span><span class="v" id="stCost">—</span></div>
+      <div class="stat"><span class="k">状態</span><span class="v phase" id="stPhase">待機中</span></div>
+    </div>
+  </section>
+
+  <section class="panel" id="cmpBox" hidden>
+    <div style="font-weight:700;margin-bottom:2px;">全アルゴリズム比較（同一迷路）</div>
+    <table>
+      <thead>
+        <tr><th>アルゴリズム</th><th>訪問</th><th>経路長</th><th>コスト</th><th>ステップ</th></tr>
+      </thead>
+      <tbody id="cmpBody"></tbody>
+    </table>
+    <div class="note" id="cmpNote"></div>
+  </section>
+</div>
+
+<script>
+"use strict";
+(function(){
+/* ===================== 基本ユーティリティ ===================== */
+const DX = [0, 1, 0, -1];   // N,E,S,W
+const DY = [-1, 0, 1, 0];
+const OPP = [2, 3, 0, 1];
+const SWAMP_W = 6;          // 沼地セルに入るコスト
+
+// シード付き乱数（mulberry32）: 同じシードで完全再現
+function mulberry32(a){
+  a = a >>> 0;
+  return function(){
+    a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function clampSize(v){
+  v = Math.round(Number(v) || 21);
+  if (v < 10) v = 10;
+  if (v > 80) v = 80;
+  return v;
+}
+// セル (x,y) と隣接セルの間の壁を取り除く
+function carveEdge(walls, n, x, y, d){
+  const nx = x + DX[d], ny = y + DY[d];
+  if (nx < 0 || ny < 0 || nx >= n || ny >= n) return;
+  walls[y * n + x] &= ~(1 << d);
+  walls[ny * n + nx] &= ~(1 << OPP[d]);
+}
+function neighborsOf(n, walls, i, out){
+  const x = i % n, y = (i / n) | 0;
+  const w = walls[i];
+  let c = 0;
+  for (let d = 0; d < 4; d++){
+    if (w & (1 << d)) continue;
+    const nx = x + DX[d], ny = y + DY[d];
+    if (nx < 0 || ny < 0 || nx >= n || ny >= n) continue;
+    out[c++] = ny * n + nx;
+  }
+  return c;
+}
+
+/* ===================== 迷路生成アルゴリズム ===================== */
+// すべて「完全迷路（全域木）」を生成し、可視化イベント列も同時に記録する。
+
+// 1) 再帰バックトラッカー（反復 DFS）
+function genBacktracker(n, rng, ev){
+  const walls = new Uint8Array(n * n).fill(15);
+  const visited = new Uint8Array(n * n);
+  const stack = [];
+  const sx = (rng() * n) | 0, sy = (rng() * n) | 0;
+  visited[sy * n + sx] = 1;
+  stack.push([sx, sy]);
+  const dirs = [0, 1, 2, 3];
+  while (stack.length){
+    const top = stack[stack.length - 1];
+    const cx = top[0], cy = top[1];
+    for (let i = 3; i > 0; i--){ const j = (rng() * (i + 1)) | 0; const t = dirs[i]; dirs[i] = dirs[j]; dirs[j] = t; }
+    let moved = false;
+    for (let k = 0; k < 4; k++){
+      const d = dirs[k];
+      const nx = cx + DX[d], ny = cy + DY[d];
+      if (nx < 0 || ny < 0 || nx >= n || ny >= n) continue;
+      if (visited[ny * n + nx]) continue;
+      carveEdge(walls, n, cx, cy, d);
+      visited[ny * n + nx] = 1;
+      stack.push([nx, ny]);
+      ev.push({ t: 'carve', x: cx, y: cy, nx: nx, ny: ny, d: d });
+      moved = true;
+      break;
+    }
+    if (!moved){ stack.pop(); ev.push({ t: 'back', x: cx, y: cy }); }
+  }
+  return walls;
+}
+
+// 2) ランダム化 Prim
+function genPrim(n, rng, ev){
+  const walls = new Uint8Array(n * n).fill(15);
+  const inMaze = new Uint8Array(n * n);
+  const frontier = [];
+  function add(x, y){
+    for (let d = 0; d < 4; d++){
+      const nx = x + DX[d], ny = y + DY[d];
+      if (nx < 0 || ny < 0 || nx >= n || ny >= n) continue;
+      if (inMaze[ny * n + nx]) continue;
+      frontier.push([x, y, d]);
+    }
+  }
+  const sx = (rng() * n) | 0, sy = (rng() * n) | 0;
+  inMaze[sy * n + sx] = 1;
+  add(sx, sy);
+  while (frontier.length){
+    const k = (rng() * frontier.length) | 0;
+    const e = frontier[k];
+    frontier[k] = frontier[frontier.length - 1];
+    frontier.pop();
+    const x = e[0], y = e[1], d = e[2];
+    const nx = x + DX[d], ny = y + DY[d];
+    if (nx < 0 || ny < 0 || nx >= n || ny >= n) continue;
+    if (inMaze[ny * n + nx]){ ev.push({ t: 'skip', x: x, y: y, nx: nx, ny: ny, d: d }); continue; }
+    carveEdge(walls, n, x, y, d);
+    inMaze[ny * n + nx] = 1;
+    add(nx, ny);
+    ev.push({ t: 'carve', x: x, y: y, nx: nx, ny: ny, d: d });
+  }
+  return walls;
+}
+
+// 3) ランダム化 Kruskal（Union-Find）
+function genKruskal(n, rng, ev){
+  const walls = new Uint8Array(n * n).fill(15);
+  const parent = new Int32Array(n * n);
+  for (let i = 0; i < n * n; i++) parent[i] = i;
+  function find(a){ while (parent[a] !== a){ parent[a] = parent[parent[a]]; a = parent[a]; } return a; }
+  const edges = [];
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++){
+    if (x + 1 < n) edges.push([x, y, 1]);
+    if (y + 1 < n) edges.push([x, y, 2]);
+  }
+  for (let i = edges.length - 1; i > 0; i--){ const j = (rng() * (i + 1)) | 0; const t = edges[i]; edges[i] = edges[j]; edges[j] = t; }
+  for (let i = 0; i < edges.length; i++){
+    const x = edges[i][0], y = edges[i][1], d = edges[i][2];
+    const nx = x + DX[d], ny = y + DY[d];
+    const a = find(y * n + x), b = find(ny * n + nx);
+    if (a !== b){
+      parent[a] = b;
+      carveEdge(walls, n, x, y, d);
+      ev.push({ t: 'carve', x: x, y: y, nx: nx, ny: ny, d: d });
+    } else {
+      ev.push({ t: 'skip', x: x, y: y, nx: nx, ny: ny, d: d });
+    }
+  }
+  return walls;
+}
+// 4) Wilson（ループ消去ランダムウォーク）
+function genWilson(n, rng, ev){
+  const walls = new Uint8Array(n * n).fill(15);
+  const total = n * n;
+  const inMaze = new Uint8Array(total);
+  const dirOf = new Int8Array(total);
+  const order = new Int32Array(total);
+  for (let i = 0; i < total; i++) order[i] = i;
+  for (let i = total - 1; i > 0; i--){ const j = (rng() * (i + 1)) | 0; const t = order[i]; order[i] = order[j]; order[j] = t; }
+  inMaze[order[0]] = 1; // 最初の1マスを迷路に追加
+
+  const dirsBuf = new Int32Array(4);
+  for (let oi = 1; oi < total; oi++){
+    const s = order[oi];
+    if (inMaze[s]) continue;
+    let cur = s;
+    // 迷路にぶつかるまでランダムウォーク（方向を上書きしてループを消去）
+    while (!inMaze[cur]){
+      const x = cur % n, y = (cur / n) | 0;
+      let c = 0;
+      for (let d = 0; d < 4; d++){
+        const nx = x + DX[d], ny = y + DY[d];
+        if (nx < 0 || ny < 0 || nx >= n || ny >= n) continue;
+        dirsBuf[c++] = d;
+      }
+      const d = dirsBuf[(rng() * c) | 0];
+      dirOf[cur] = d;
+      cur = (y + DY[d]) * n + (x + DX[d]);
+    }
+    // 経路をたどって壁を削る
+    cur = s;
+    while (!inMaze[cur]){
+      const d = dirOf[cur];
+      const x = cur % n, y = (cur / n) | 0;
+      const nx = x + DX[d], ny = y + DY[d];
+      carveEdge(walls, n, x, y, d);
+      inMaze[cur] = 1;
+      ev.push({ t: 'carve', x: x, y: y, nx: nx, ny: ny, d: d });
+      cur = ny * n + nx;
+    }
+  }
+  return walls;
+}
+
+// 5) Eller（行ごとに集合をマージ）
+function genEller(n, rng, ev){
+  const walls = new Uint8Array(n * n).fill(15);
+  let setCount = 1;
+  let sets = new Int32Array(n);
+  for (let x = 0; x < n; x++) sets[x] = setCount++;
+
+  for (let y = 0; y < n; y++){
+    // 横方向の結合
+    for (let x = 0; x < n - 1; x++){
+      if (sets[x] !== sets[x + 1] && (y === n - 1 || rng() < 0.5)){
+        carveEdge(walls, n, x, y, 1);
+        ev.push({ t: 'carve', x: x, y: y, nx: x + 1, ny: y, d: 1 });
+        const a = sets[x], b = sets[x + 1];
+        for (let k = 0; k < n; k++) if (sets[k] === b) sets[k] = a;
+      } else {
+        ev.push({ t: 'skip', x: x, y: y, nx: x + 1, ny: y, d: 1 });
+      }
+    }
+    if (y === n - 1) break;
+    // 縦方向の通路（各集合に最低1つ）
+    const newSets = new Int32Array(n);
+    const hasDown = {};
+    for (let x = 0; x < n; x++){
+      const s = sets[x];
+      const down = !hasDown[s] || rng() < 0.5;
+      if (down){
+        carveEdge(walls, n, x, y, 2);
+        ev.push({ t: 'carve', x: x, y: y, nx: x, ny: y + 1, d: 2 });
+        hasDown[s] = true;
+        newSets[x] = s;
+      }
+    }
+    for (let x = 0; x < n; x++) if (newSets[x] === 0) newSets[x] = setCount++;
+    sets = newSets;
+  }
+  return walls;
+}
+
+function normalizeGen(a){
+  const s = String(a == null ? '' : a).toLowerCase();
+  if (s.indexOf('kruskal') >= 0) return 'kruskal';
+  if (s.indexOf('prim') >= 0) return 'prim';
+  if (s.indexOf('wilson') >= 0) return 'wilson';
+  if (s.indexOf('eller') >= 0) return 'eller';
+  return 'backtracker';
+}
+function normalizeSolve(a){
+  const s = String(a == null ? '' : a).toLowerCase().replace(/[\s_*\-]/g, '');
+  if (s === 'dfs') return 'dfs';
+  if (s === 'dijkstra' || s === 'dij') return 'dijkstra';
+  if (s === 'astar' || s === 'a' || s === 'astar(manhattan)') return 'astar';
+  return 'bfs';
+}
+// 迷路データ（最終的な壁 + 可視化イベント列）を生成
+function buildMaze(algo, n, seed){
+  const rng = mulberry32(seed >>> 0);
+  const ev = [];
+  let walls;
+  switch (normalizeGen(algo)){
+    case 'kruskal':    walls = genKruskal(n, rng, ev); break;
+    case 'prim':       walls = genPrim(n, rng, ev); break;
+    case 'wilson':     walls = genWilson(n, rng, ev); break;
+    case 'eller':      walls = genEller(n, rng, ev); break;
+    default:           walls = genBacktracker(n, rng, ev);
+  }
+  return { walls: walls, events: ev };
+}
+/* ===================== 経路探索アルゴリズム ===================== */
+function MinHeap(){
+  this.a = [];
+}
+MinHeap.prototype.push = function(item){
+  const a = this.a;
+  a.push(item);
+  let i = a.length - 1;
+  while (i > 0){
+    const p = (i - 1) >> 1;
+    if (a[p][0] <= a[i][0]) break;
+    const t = a[p]; a[p] = a[i]; a[i] = t;
+    i = p;
+  }
+};
+MinHeap.prototype.pop = function(){
+  const a = this.a;
+  const top = a[0];
+  const last = a.pop();
+  if (a.length){
+    a[0] = last;
+    let i = 0;
+    for (;;){
+      const l = 2 * i + 1, r = l + 1;
+      let s = i;
+      if (l < a.length && a[l][0] < a[s][0]) s = l;
+      if (r < a.length && a[r][0] < a[s][0]) s = r;
+      if (s === i) break;
+      const t = a[s]; a[s] = a[i]; a[i] = t;
+      i = s;
+    }
+  }
+  return top;
+};
+Object.defineProperty(MinHeap.prototype, 'size', { get: function(){ return this.a.length; } });
+
+// 同期版の探索。可視化イベント列も返す。
+function runSolve(algo, g){
+  algo = normalizeSolve(algo);
+  const n = g.n, N = n * n, walls = g.walls, swamp = g.swamp;
+  const start = g.start.y * n + g.start.x;
+  const goal = g.goal.y * n + g.goal.x;
+  const hx = g.goal.x, hy = g.goal.y;
+  const prev = new Int32Array(N).fill(-1);
+  const dist = new Float64Array(N).fill(Infinity);
+  const closed = new Uint8Array(N);
+  const inOpen = new Uint8Array(N);
+  const events = [];
+  const nb = new Int32Array(4);
+  let scans = 0, settled = 0;
+  const cost = function(i){ return swamp[i] ? SWAMP_W : 1; };
+  const settle = function(cur){
+    closed[cur] = 1; settled++; inOpen[cur] = 0;
+    events.push({ t: 'visit', i: cur });
+  };
+
+  if (algo === 'bfs'){
+    const q = new Int32Array(N); let head = 0, tail = 0;
+    dist[start] = 0; inOpen[start] = 1; q[tail++] = start; events.push({ t: 'push', i: start });
+    while (head < tail){
+      const cur = q[head++];
+      if (closed[cur]) continue;
+      settle(cur);
+      if (cur === goal) break;
+      const c = neighborsOf(n, walls, cur, nb);
+      for (let k = 0; k < c; k++){
+        const j = nb[k]; scans++;
+        if (!closed[j] && !inOpen[j]){ inOpen[j] = 1; prev[j] = cur; dist[j] = dist[cur] + 1; q[tail++] = j; events.push({ t: 'push', i: j }); }
+      }
+    }
+  } else if (algo === 'dfs'){
+    const stack = new Int32Array(N); let sp = 0;
+    dist[start] = 0; inOpen[start] = 1; stack[sp++] = start; events.push({ t: 'push', i: start });
+    while (sp > 0){
+      const cur = stack[--sp];
+      if (closed[cur]) continue;
+      settle(cur);
+      if (cur === goal) break;
+      const c = neighborsOf(n, walls, cur, nb);
+      for (let k = 0; k < c; k++){
+        const j = nb[k]; scans++;
+        if (!closed[j] && !inOpen[j]){ inOpen[j] = 1; prev[j] = cur; dist[j] = dist[cur] + 1; stack[sp++] = j; events.push({ t: 'push', i: j }); }
+      }
+    }
+  } else if (algo === 'dijkstra'){
+    const heap = new MinHeap();
+    dist[start] = 0; inOpen[start] = 1; heap.push([0, start]); events.push({ t: 'push', i: start });
+    while (heap.size){
+      const cur = heap.pop()[1];
+      if (closed[cur]) continue;
+      settle(cur);
+      if (cur === goal) break;
+      const dc = dist[cur];
+      const c = neighborsOf(n, walls, cur, nb);
+      for (let k = 0; k < c; k++){
+        const j = nb[k]; scans++;
+        if (closed[j]) continue;
+        const nd = dc + cost(j);
+        if (nd < dist[j]){
+          dist[j] = nd; prev[j] = cur; heap.push([nd, j]);
+          if (!inOpen[j]){ inOpen[j] = 1; events.push({ t: 'push', i: j }); }
+        }
+      }
+    }
+  } else { // astar
+    const h = function(i){ const x = i % n, y = (i / n) | 0; return Math.abs(x - hx) + Math.abs(y - hy); };
+    const heap = new MinHeap();
+    dist[start] = 0; inOpen[start] = 1; heap.push([h(start), start]); events.push({ t: 'push', i: start });
+    while (heap.size){
+      const cur = heap.pop()[1];
+      if (closed[cur]) continue;
+      settle(cur);
+      if (cur === goal) break;
+      const dc = dist[cur];
+      const c = neighborsOf(n, walls, cur, nb);
+      for (let k = 0; k < c; k++){
+        const j = nb[k]; scans++;
+        if (closed[j]) continue;
+        const nd = dc + cost(j);
+        if (nd < dist[j]){
+          dist[j] = nd; prev[j] = cur; heap.push([nd + h(j), j]);
+          if (!inOpen[j]){ inOpen[j] = 1; events.push({ t: 'push', i: j }); }
+        }
+      }
+    }
+  }
+
+  const path = [];
+  if (closed[goal]){
+    let c = goal;
+    while (c !== -1){ path.push(c); c = prev[c]; }
+    path.reverse();
+  }
+  for (let k = 0; k < path.length; k++) events.push({ t: 'path', i: path[k] });
+
+  let totalCost = 0;
+  if (algo === 'dijkstra' || algo === 'astar'){
+    totalCost = closed[goal] ? dist[goal] : 0;
+  } else {
+    for (let k = 1; k < path.length; k++) totalCost += cost(path[k]);
+  }
+  return { algo: algo, visited: settled, pathLength: path.length, steps: scans, cost: totalCost, path: path, events: events };
+}
+/* ===================== 状態 ===================== */
+const grid = { n: 0, walls: new Uint8Array(0), swamp: new Uint8Array(0), start: { x: 0, y: 0 }, goal: { x: 0, y: 0 } };
+let visVisited = new Uint8Array(0);
+let visFrontier = new Uint8Array(0);
+let visPath = new Uint8Array(0);
+let visitedCount = 0, frontierCount = 0;
+let genCursor = null;
+let lastResult = null;
+let busy = null; // null | 'gen' | 'solve'
+let dirty = true;
+
+const anim = { running: false, kind: null, events: [], pos: 0, apply: null, onDone: null, acc: 0, last: 0, eps: 300 };
+
+/* ===================== DOM ===================== */
+const $ = function(id){ return document.getElementById(id); };
+const cv = $('cv');
+const ctx = cv.getContext('2d');
+const genSelect = $('genSelect');
+const solveSelect = $('solveSelect');
+const sizeRange = $('sizeRange');
+const sizeVal = $('sizeVal');
+const speedRange = $('speedRange');
+const speedVal = $('speedVal');
+const seedInput = $('seedInput');
+const swampToggle = $('swampToggle');
+const wallEdit = $('wallEdit');
+const btnGen = $('btnGen');
+const btnSolve = $('btnSolve');
+const btnCompare = $('btnCompare');
+const btnStop = $('btnStop');
+const btnClear = $('btnClear');
+const btnSeed = $('btnSeed');
+const stAlgo = $('stAlgo');
+const stVisited = $('stVisited');
+const stLen = $('stLen');
+const stSteps = $('stSteps');
+const stCost = $('stCost');
+const stPhase = $('stPhase');
+const cmpBox = $('cmpBox');
+const cmpBody = $('cmpBody');
+const cmpNote = $('cmpNote');
+
+let cssSize = 300;
+let dpr = 1;
+
+const COL = {
+  bg: '#05080c',
+  wall: '#8b949e',
+  swamp: 'rgba(139,90,43,0.42)',
+  visited: 'rgba(88,166,255,0.42)',
+  frontier: 'rgba(210,153,34,0.85)',
+  path: 'rgba(63,185,80,0.92)',
+  start: '#3fb950',
+  goal: '#f85149',
+  cursor: '#58a6ff'
+};
+
+/* ===================== キャンバス描画 ===================== */
+function resizeCanvas(){
+  const rect = cv.getBoundingClientRect();
+  let w = rect.width;
+  if (!w || w < 10){ w = Math.min(window.innerWidth - 32, 560); }
+  dpr = Math.min(window.devicePixelRatio || 1, 2);
+  cssSize = w;
+  cv.width = Math.max(1, Math.round(w * dpr));
+  cv.height = Math.max(1, Math.round(w * dpr));
+  dirty = true;
+}
+function fillMask(mask, color){
+  if (!mask || mask.length !== grid.n * grid.n) return;
+  const n = grid.n, cw = cssSize / n;
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  for (let i = 0; i < mask.length; i++){
+    if (mask[i]){
+      const x = i % n, y = (i / n) | 0;
+      ctx.rect(x * cw, y * cw, cw, cw);
+    }
+  }
+  ctx.fill();
+}
+function marker(i, color, n, cw){
+  if (i < 0) return;
+  const x = i % n, y = (i / n) | 0;
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc((x + 0.5) * cw, (y + 0.5) * cw, Math.max(2.5, cw * 0.3), 0, Math.PI * 2);
+  ctx.fill();
+}
+function draw(){
+  const n = grid.n;
+  if (!n) return;
+  const s = cssSize, cw = s / n;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.fillStyle = COL.bg;
+  ctx.fillRect(0, 0, s, s);
+
+  fillMask(grid.swamp, COL.swamp);
+  if (visVisited.length === n * n){
+    fillMask(visVisited, COL.visited);
+    fillMask(visFrontier, COL.frontier);
+    fillMask(visPath, COL.path);
+  }
+
+  // 生成中のカーソル
+  if (anim.running && anim.kind === 'gen' && genCursor){
+    ctx.strokeStyle = COL.cursor;
+    ctx.lineWidth = Math.max(1, cw * 0.22);
+    ctx.strokeRect(genCursor.x * cw + 0.5, genCursor.y * cw + 0.5, cw - 1, cw - 1);
+  }
+
+  // 壁
+  ctx.strokeStyle = COL.wall;
+  ctx.lineWidth = Math.max(1, Math.min(2.6, cw * 0.16));
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  for (let y = 0; y < n; y++){
+    for (let x = 0; x < n; x++){
+      const i = y * n + x, w = grid.walls[i];
+      const x0 = x * cw, y0 = y * cw, x1 = x0 + cw, y1 = y0 + cw;
+      if (w & 1){ ctx.moveTo(x0, y0); ctx.lineTo(x1, y0); }
+      if (w & 8){ ctx.moveTo(x0, y0); ctx.lineTo(x0, y1); }
+      if (x === n - 1 && (w & 2)){ ctx.moveTo(x1, y0); ctx.lineTo(x1, y1); }
+      if (y === n - 1 && (w & 4)){ ctx.moveTo(x0, y1); ctx.lineTo(x1, y1); }
+    }
+  }
+  ctx.stroke();
+
+  // スタート / ゴール
+  marker(grid.start.y * n + grid.start.x, COL.start, n, cw);
+  marker(grid.goal.y * n + grid.goal.x, COL.goal, n, cw);
+}
+/* ===================== アニメーション制御 ===================== */
+function computeEps(){
+  const sp = Number(speedRange.value) || 6;
+  return 60 * Math.pow(2, sp - 1);
+}
+function updateButtons(){
+  const b = busy !== null;
+  btnGen.disabled = b; btnSolve.disabled = b; btnCompare.disabled = b;
+  btnStop.disabled = !b;
+  genSelect.disabled = b; solveSelect.disabled = b;
+  sizeRange.disabled = b; seedInput.disabled = b;
+}
+function startAnim(kind, events, apply, onDone){
+  anim.running = true; anim.kind = kind; anim.events = events; anim.pos = 0;
+  anim.apply = apply; anim.onDone = onDone; anim.acc = 0; anim.last = performance.now();
+  anim.eps = computeEps();
+  busy = kind; updateButtons(); dirty = true;
+}
+function endAnim(){
+  anim.running = false;
+  const cb = anim.onDone;
+  anim.onDone = null;
+  busy = null;
+  if (cb) cb();
+  updateButtons(); dirty = true;
+}
+function stopAnim(){
+  if (anim.running){ anim.running = false; anim.onDone = null; busy = null; updateButtons(); dirty = true; }
+}
+function completeAnim(){
+  if (!anim.running) return;
+  while (anim.pos < anim.events.length){ anim.apply(anim.events[anim.pos++]); }
+  endAnim();
+}
+function loop(ts){
+  requestAnimationFrame(loop);
+  if (anim.running){
+    const dt = Math.min(0.05, (ts - anim.last) / 1000) || 0;
+    anim.last = ts;
+    let budget = anim.eps * dt + anim.acc;
+    let count = Math.floor(budget);
+    anim.acc = budget - count;
+    if (count > 4000) count = 4000;
+    let done = 0;
+    while (done < count && anim.pos < anim.events.length){
+      anim.apply(anim.events[anim.pos++]);
+      done++;
+    }
+    dirty = true;
+    if (anim.kind === 'solve'){ stVisited.textContent = String(visitedCount); }
+    if (anim.pos >= anim.events.length) endAnim();
+  } else {
+    anim.last = ts;
+  }
+  if (dirty){ draw(); dirty = false; }
+}
+
+/* ===================== 状態リセット ===================== */
+function ensureVisArrays(){
+  const N = grid.n * grid.n;
+  if (visVisited.length !== N){
+    visVisited = new Uint8Array(N);
+    visFrontier = new Uint8Array(N);
+    visPath = new Uint8Array(N);
+  }
+}
+function clearSearch(){
+  ensureVisArrays();
+  visVisited.fill(0); visFrontier.fill(0); visPath.fill(0);
+  visitedCount = 0; frontierCount = 0;
+  lastResult = null;
+  updateStats(null);
+  dirty = true;
+}
+function updateStats(res){
+  if (!res){
+    stAlgo.textContent = '—'; stVisited.textContent = '—';
+    stLen.textContent = '—'; stSteps.textContent = '—'; stCost.textContent = '—';
+    return;
+  }
+  const names = { bfs: 'BFS', dfs: 'DFS', dijkstra: 'ダイクストラ', astar: 'A*' };
+  stAlgo.textContent = names[res.algo] || res.algo;
+  stVisited.textContent = String(res.visited);
+  stLen.textContent = res.pathLength > 0 ? String(res.pathLength) : '到達不可';
+  stSteps.textContent = String(res.steps);
+  stCost.textContent = res.pathLength > 0 ? String(res.cost) : '—';
+}
+function computeSwamp(n, seed, enabled){
+  const arr = new Uint8Array(n * n);
+  if (enabled){
+    const rng = mulberry32(((seed >>> 0) ^ 0x9E3779B9) >>> 0);
+    for (let i = 0; i < n * n; i++) if (rng() < 0.16) arr[i] = 1;
+  }
+  return arr;
+}
+function refreshSwamp(seedOpt){
+  const seed = (seedOpt === undefined) ? ((parseInt(seedInput.value, 10) || 0) >>> 0) : (seedOpt >>> 0);
+  grid.swamp = computeSwamp(grid.n, seed, swampToggle.checked);
+  grid.swamp[grid.start.y * grid.n + grid.start.x] = 0;
+  grid.swamp[grid.goal.y * grid.n + grid.goal.x] = 0;
+  dirty = true;
+}
+
+/* ===================== 生成フロー ===================== */
+function applyGenEvent(ev){
+  if (ev.t === 'carve'){ carveEdge(grid.walls, grid.n, ev.x, ev.y, ev.d); genCursor = ev; }
+  else if (ev.t === 'back'){ genCursor = { x: ev.x, y: ev.y }; }
+  else if (ev.t === 'skip'){ genCursor = { x: ev.x, y: ev.y }; }
+}
+function doGenerate(animate){
+  stopAnim();
+  const n = clampSize(sizeRange.value);
+  const seed = (parseInt(seedInput.value, 10) || 0) >>> 0;
+  const algo = genSelect.value;
+  const data = buildMaze(algo, n, seed);
+
+  grid.n = n;
+  grid.start = { x: 0, y: 0 };
+  grid.goal = { x: n - 1, y: n - 1 };
+  grid.walls = new Uint8Array(n * n).fill(15);
+  refreshSwamp(seed);
+  clearSearch();
+  ensureVisArrays();
+  genCursor = null;
+
+  if (animate && data.events.length){
+    startAnim('gen', data.events, applyGenEvent, function(){
+      grid.walls.set(data.walls);
+      genCursor = null;
+      stPhase.textContent = '生成完了';
+      dirty = true;
+    });
+    stPhase.textContent = '生成中…';
+  } else {
+    grid.walls.set(data.walls);
+    stPhase.textContent = '待機中';
+    dirty = true;
+    updateButtons();
+  }
+}
+
+/* ===================== 探索フロー ===================== */
+function applySolveEvent(ev){
+  if (ev.t === 'push'){ if (!visFrontier[ev.i]){ visFrontier[ev.i] = 1; frontierCount++; } }
+  else if (ev.t === 'visit'){ if (visFrontier[ev.i]){ visFrontier[ev.i] = 0; frontierCount--; } visVisited[ev.i] = 1; visitedCount++; }
+  else if (ev.t === 'path'){ visPath[ev.i] = 1; }
+}
+function doSolve(){
+  completeAnim();
+  const res = runSolve(solveSelect.value, grid);
+  clearSearch();
+  ensureVisArrays();
+  visitedCount = 0; frontierCount = 0;
+  lastResult = res;
+  stPhase.textContent = '探索中…';
+  startAnim('solve', res.events, applySolveEvent, function(){
+    updateStats(res);
+    stPhase.textContent = res.pathLength > 0 ? '探索完了' : '到達不可';
+    dirty = true;
+  });
+}
+
+/* ===================== 全アルゴリズム比較 ===================== */
+function doCompare(){
+  completeAnim();
+  const list = [['BFS', 'bfs'], ['DFS', 'dfs'], ['ダイクストラ', 'dijkstra'], ['A*', 'astar']];
+  const rows = [];
+  for (let k = 0; k < list.length; k++){
+    rows.push({ name: list[k][0], key: list[k][1], r: runSolve(list[k][1], grid) });
+  }
+  let html = '';
+  for (let k = 0; k < rows.length; k++){
+    const r = rows[k].r;
+    const len = r.pathLength > 0 ? r.pathLength : '—';
+    const cost = r.pathLength > 0 ? r.cost : '—';
+    html += '<tr><td>' + rows[k].name + '</td><td>' + r.visited + '</td><td>' + len + '</td><td>' + cost + '</td><td>' + r.steps + '</td></tr>';
+  }
+  cmpBody.innerHTML = html;
+
+  const b = rows[0].r, d = rows[2].r, a = rows[3].r;
+  const reach = b.pathLength > 0 && d.pathLength > 0 && a.pathLength > 0;
+  let cls = 'info', note;
+  if (!reach){
+    note = '⚠️ スタートからゴールへ到達できません（壁編集で分断された可能性があります）。';
+    cls = 'info';
+  } else if (b.pathLength === d.pathLength && d.pathLength === a.pathLength){
+    note = '✅ 最短経路長が一致： BFS=' + b.pathLength + ' / ダイクストラ=' + d.pathLength + ' / A*=' + a.pathLength + '（セル数）。';
+    if (swampToggle.checked){
+      note += ' 沼地ONでも同セル数で、総コストはダイクストラ=' + d.cost + ' / A*=' + a.cost + '（一致: ' + (d.cost === a.cost ? 'はい' : 'いいえ') + '）。BFSのコスト=' + b.cost + '。';
+    } else {
+      note += ' 総コストも一致（' + d.cost + '）。';
+    }
+    cls = 'ok';
+  } else {
+    note = 'ℹ️ 沼地（重み）ONのため、セル数の経路長はBFSと一致しません。総コスト最小は ダイクストラ=' + d.cost + ' / A*=' + a.cost + '（一致: ' + (d.cost === a.cost ? 'はい' : 'いいえ') + '）、BFSのコスト=' + b.cost + '。';
+    cls = 'info';
+  }
+  cmpNote.textContent = note;
+  cmpNote.className = 'note ' + cls;
+  cmpBox.hidden = false;
+}
+
+/* ===================== 壁・マーカー編集 ===================== */
+function eventCell(e){
+  const rect = cv.getBoundingClientRect();
+  const x = e.clientX - rect.left, y = e.clientY - rect.top;
+  if (rect.width <= 0) return null;
+  const cw = rect.width / grid.n;
+  const cx = Math.floor(x / cw), cy = Math.floor(y / cw);
+  if (cx < 0 || cy < 0 || cx >= grid.n || cy >= grid.n) return null;
+  return { x: cx, y: cy, fx: x / cw - cx, fy: y / cw - cy };
+}
+function nearestDir(c){
+  let d = 0, min = c.fy;             // N
+  if (1 - c.fx < min){ min = 1 - c.fx; d = 1; } // E
+  if (1 - c.fy < min){ min = 1 - c.fy; d = 2; } // S
+  if (c.fx < min){ min = c.fx; d = 3; }         // W
+  return d;
+}
+function setWallAt(x, y, d, want){
+  const n = grid.n, nx = x + DX[d], ny = y + DY[d];
+  if (nx < 0 || ny < 0 || nx >= n || ny >= n) return false; // 外周は変更しない
+  const i = y * n + x, j = ny * n + nx;
+  if (want){ grid.walls[i] |= (1 << d); grid.walls[j] |= (1 << OPP[d]); }
+  else { grid.walls[i] &= ~(1 << d); grid.walls[j] &= ~(1 << OPP[d]); }
+  return true;
+}
+function toggleNearestWall(c){
+  const d = nearestDir(c);
+  const nx = c.x + DX[d], ny = c.y + DY[d];
+  if (nx < 0 || ny < 0 || nx >= grid.n || ny >= grid.n) return null;
+  const i = c.y * grid.n + c.x;
+  const isWall = (grid.walls[i] & (1 << d)) !== 0;
+  const want = !isWall;
+  setWallAt(c.x, c.y, d, want);
+  return want;
+}
+function moveMarker(which, x, y){
+  const n = grid.n;
+  const other = which === 'start' ? grid.goal : grid.start;
+  if (x === other.x && y === other.y) return;
+  if (x < 0 || y < 0 || x >= n || y >= n) return;
+  const m = which === 'start' ? grid.start : grid.goal;
+  if (m.x === x && m.y === y) return;
+  m.x = x; m.y = y;
+  grid.swamp[y * n + x] = 0;
+  clearSearch();
+  dirty = true;
+}
+
+let drag = null;
+function onDown(e){
+  if (busy !== null) return;
+  const c = eventCell(e);
+  if (!c) return;
+  try { cv.setPointerCapture(e.pointerId); } catch (err) {}
+  if (c.x === grid.start.x && c.y === grid.start.y){ drag = { mode: 'start' }; return; }
+  if (c.x === grid.goal.x && c.y === grid.goal.y){ drag = { mode: 'goal' }; return; }
+  if (wallEdit.checked){
+    const want = toggleNearestWall(c);
+    if (want !== null){ drag = { mode: 'paint', want: want }; clearSearch(); dirty = true; }
+  }
+}
+function onMove(e){
+  if (!drag) return;
+  const c = eventCell(e);
+  if (!c) return;
+  if (drag.mode === 'start' || drag.mode === 'goal'){ moveMarker(drag.mode, c.x, c.y); }
+  else if (drag.mode === 'paint'){
+    const d = nearestDir(c);
+    if (setWallAt(c.x, c.y, d, drag.want)){ clearSearch(); dirty = true; }
+  }
+}
+function onUp(e){
+  if (drag){
+    drag = null;
+    try { cv.releasePointerCapture(e.pointerId); } catch (err) {}
+  }
+}
+/* ===================== デバッグ API ===================== */
+function snapshotGrid(){
+  const n = grid.n;
+  const cells = [];
+  for (let y = 0; y < n; y++){
+    const row = [];
+    for (let x = 0; x < n; x++){
+      const w = grid.walls[y * n + x];
+      row.push({ n: !!(w & 1), e: !!(w & 2), s: !!(w & 4), w: !!(w & 8), swamp: !!grid.swamp[y * n + x] });
+    }
+    cells.push(row);
+  }
+  return { size: n, start: { x: grid.start.x, y: grid.start.y }, goal: { x: grid.goal.x, y: grid.goal.y }, cells: cells };
+}
+function debugGenerate(algo, size, seed){
+  if (seed === undefined || seed === null) seed = 12345;
+  const n = clampSize(size === undefined ? 21 : size);
+  const s = (seed >>> 0);
+  stopAnim();
+  const data = buildMaze(algo, n, s);
+  grid.n = n;
+  grid.start = { x: 0, y: 0 };
+  grid.goal = { x: n - 1, y: n - 1 };
+  grid.walls = data.walls.slice();
+  refreshSwamp(s);
+  clearSearch();
+  ensureVisArrays();
+  genCursor = null;
+  stPhase.textContent = '待機中';
+  dirty = true;
+  return snapshotGrid();
+}
+window.__maze = {
+  generate: function(algo, size, seed){ return debugGenerate(algo, size, seed); },
+  solve: function(algo){
+    const r = runSolve(algo, grid);
+    return { visited: r.visited, pathLength: r.pathLength, steps: r.steps, cost: r.cost };
+  },
+  get grid(){ return snapshotGrid(); }
+};
+
+/* ===================== イベント登録 ===================== */
+genSelect.addEventListener('change', function(){ doGenerate(false); });
+sizeRange.addEventListener('input', function(){ sizeVal.textContent = clampSize(sizeRange.value) + ' × ' + clampSize(sizeRange.value); });
+sizeRange.addEventListener('change', function(){ doGenerate(false); });
+speedRange.addEventListener('input', function(){
+  speedVal.textContent = speedRange.value;
+  if (anim.running) anim.eps = computeEps();
+});
+seedInput.addEventListener('change', function(){ doGenerate(false); });
+swampToggle.addEventListener('change', function(){ refreshSwamp(); clearSearch(); dirty = true; });
+btnSeed.addEventListener('click', function(){
+  seedInput.value = String((Math.random() * 0xFFFFFFFF) >>> 0);
+  doGenerate(false);
+});
+btnGen.addEventListener('click', function(){ doGenerate(true); });
+btnSolve.addEventListener('click', function(){ doSolve(); });
+btnCompare.addEventListener('click', function(){ doCompare(); });
+btnStop.addEventListener('click', function(){ stopAnim(); stPhase.textContent = '停止'; });
+btnClear.addEventListener('click', function(){ stopAnim(); clearSearch(); stPhase.textContent = '待機中'; });
+
+cv.addEventListener('pointerdown', onDown);
+cv.addEventListener('pointermove', onMove);
+cv.addEventListener('pointerup', onUp);
+cv.addEventListener('pointercancel', onUp);
+cv.addEventListener('contextmenu', function(e){ e.preventDefault(); });
+
+if (typeof ResizeObserver !== 'undefined'){
+  const ro = new ResizeObserver(function(){ resizeCanvas(); });
+  ro.observe(cv);
+}
+window.addEventListener('resize', resizeCanvas);
+window.addEventListener('orientationchange', function(){ setTimeout(resizeCanvas, 120); });
+
+/* ===================== 初期化 ===================== */
+sizeVal.textContent = clampSize(sizeRange.value) + ' × ' + clampSize(sizeRange.value);
+speedVal.textContent = speedRange.value;
+resizeCanvas();
+doGenerate(false);
+requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

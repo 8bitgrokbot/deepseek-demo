@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#090b14">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>ボール&粒子サンドボックス</title>
+<style>
+  *{box-sizing:border-box}
+  html,body{
+    margin:0;padding:0;height:100%;overflow:hidden;background:#090b14;color:#e8eef7;
+    font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif;
+    -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;overscroll-behavior:none;
+  }
+  #c{position:fixed;inset:0;display:block;touch-action:none;cursor:crosshair}
+  #hud{
+    position:fixed;top:calc(8px + env(safe-area-inset-top));left:calc(8px + env(safe-area-inset-left));
+    font-size:12px;line-height:1.55;background:rgba(14,19,33,.62);border:1px solid rgba(90,140,200,.25);
+    border-radius:10px;padding:8px 10px;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+    pointer-events:none;min-width:140px;font-variant-numeric:tabular-nums;
+  }
+  #hud .row{display:flex;justify-content:space-between;gap:14px}
+  #hud b{color:#7fd4ff;font-weight:600}
+  #ui{
+    position:fixed;left:50%;transform:translateX(-50%);bottom:calc(10px + env(safe-area-inset-bottom));
+    display:flex;flex-wrap:wrap;gap:8px;justify-content:center;width:min(680px,94vw);
+    background:rgba(14,19,33,.72);border:1px solid rgba(90,140,200,.25);border-radius:14px;
+    padding:8px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+  }
+  button{
+    flex:1 1 auto;min-width:76px;padding:10px 8px;border-radius:9px;
+    border:1px solid rgba(120,170,230,.35);background:linear-gradient(#1d2a44,#141d31);color:#dce8f7;
+    font-size:13px;font-weight:600;-webkit-tap-highlight-color:transparent;cursor:pointer;
+    touch-action:manipulation;transition:filter .15s,transform .05s;font-family:inherit;
+  }
+  button:active{filter:brightness(1.4);transform:translateY(1px)}
+  button.on{background:linear-gradient(#2a6fa8,#1b4c78);border-color:#5fb4ff;color:#eaf6ff}
+  #help{
+    position:fixed;right:calc(10px + env(safe-area-inset-right));top:calc(8px + env(safe-area-inset-top));
+    font-size:11px;opacity:.55;text-align:right;pointer-events:none;line-height:1.6;max-width:46vw;
+  }
+  @media (max-width:620px){#help{display:none}}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="hud">
+  <div class="row"><span>FPS</span><b id="fps">0</b></div>
+  <div class="row"><span>ボール</span><b id="cnt">0</b></div>
+  <div class="row"><span>衝突/フレーム</span><b id="col">0</b></div>
+  <div class="row"><span>総エネルギー</span><b id="eng">0</b></div>
+</div>
+
+<div id="ui">
+  <button id="bMass">大量生成</button>
+  <button id="bClear">全消去</button>
+  <button id="bGrav">重力: 下</button>
+  <button id="bMode">モード: 引力</button>
+</div>
+
+<div id="help">
+  タップ: ボール生成<br>
+  長押し: 引力/斥力の場<br>
+  ドラッグ: つかんで投げる
+</div>
+
+<script>
+(function(){
+'use strict';
+
+// ---------- 基本セットアップ ----------
+var canvas = document.getElementById('c');
+var ctx = canvas.getContext('2d', { alpha:false });
+var W = window.innerWidth, H = window.innerHeight, DPR = 1;
+
+var fpsEl = document.getElementById('fps');
+var cntEl = document.getElementById('cnt');
+var colEl = document.getElementById('col');
+var engEl = document.getElementById('eng');
+var bMass = document.getElementById('bMass');
+var bClear = document.getElementById('bClear');
+var bGrav = document.getElementById('bGrav');
+var bMode = document.getElementById('bMode');
+
+// ---------- 定数 ----------
+var G0 = 1350;              // 重力加速度(px/s^2)
+var FIXED = 1/120;          // 固定タイムステップ
+var WALL_REST = 0.70;       // 壁の反発
+var MAX_BALLS = 1500;
+var MAX_SPARKS = 800;
+
+var FIELD_R = 130;          // 力場の半径
+var FIELD_ACC = 3600;       // 力場の加速度
+
+// ---------- 状態 ----------
+var balls = [];
+var sparks = [];
+var obstacles = [];
+var idc = 1;
+
+var gx = 0, gy = G0;
+var gravityMode = 'down';   // down | up | none | tilt
+var mode = 'attract';       // attract | repel
+
+var frameCollisions = 0;
+var fpsSmooth = 60;
+
+var stats = { fps:0, count:0, collisions:0, energy:0 };
+
+var pointers = new Map();   // pointerId -> state
+var grabbedMap = new Map(); // ball -> pointer state
+var fieldPts = [];          // 力場ポインタの一時配列
+
+// ---------- ボール生成 ----------
+function makeBall(x, y, r){
+  if (typeof r !== 'number' || !isFinite(r)) r = 5 + Math.random()*7;
+  var m = r*r*0.05;
+  return {
+    id: idc++, x:x, y:y, r:r, m:m, invM:1/m,
+    vx:0, vy:0, speed:0,
+    rest:0.62, fric:0.28
+  };
+}
+
+function spawn(x, y, r){
+  if (typeof x !== 'number' || !isFinite(x)) x = W*0.5;
+  if (typeof y !== 'number' || !isFinite(y)) y = H*0.35;
+  var b = makeBall(x, y, r);
+  b.vx = (Math.random()-0.5)*60;
+  b.vy = (Math.random()-0.5)*60;
+  balls.push(b);
+  return b;
+}
+
+function spawnMany(n){
+  for (var i=0;i<n;i++){
+    if (balls.length >= MAX_BALLS) break;
+    var x = W*(0.12 + Math.random()*0.76);
+    var y = Math.random()*H*0.30;
+    var b = makeBall(x, y, 5 + Math.random()*8);
+    b.vx = (Math.random()-0.5)*220;
+    b.vy = (Math.random()-0.5)*120;
+    balls.push(b);
+  }
+}
+
+function clearAll(){
+  balls.length = 0;
+  sparks.length = 0;
+}
+
+// ---------- 障害物 ----------
+function updateObstacles(){
+  obstacles.length = 0;
+  var m = Math.min(W, H);
+  obstacles.push({ type:'circle', x:W*0.50, y:H*0.34, r:Math.max(16, m*0.07) });
+  obstacles.push({ type:'seg', x1:W*0.06, y1:H*0.62, x2:W*0.52, y2:H*0.52, r:6 });
+  obstacles.push({ type:'seg', x1:W*0.94, y1:H*0.74, x2:W*0.48, y2:H*0.63, r:6 });
+}
+
+// ---------- 火花パーティクル ----------
+function spawnSparks(x, y, impact, nx, ny){
+  if (sparks.length >= MAX_SPARKS) return;
+  var n = Math.min(6, 2 + (impact/130|0));
+  var base = Math.atan2(ny, nx);
+  for (var i=0;i<n;i++){
+    var ang = base + (Math.random()-0.5)*Math.PI*1.4;
+    var sp = impact*0.16*(0.4 + Math.random());
+    sparks.push({
+      x:x, y:y,
+      vx:Math.cos(ang)*sp, vy:Math.sin(ang)*sp,
+      life:0.30 + Math.random()*0.35,
+      r:1 + Math.random()*2
+    });
+  }
+}
+
+function updateSparks(dt){
+  for (var i=sparks.length-1;i>=0;i--){
+    var s = sparks[i];
+    s.life -= dt;
+    if (s.life <= 0){ sparks.splice(i,1); continue; }
+    s.vy += gy*0.4*dt;
+    s.vx *= 0.97; s.vy *= 0.97;
+    s.x += s.vx*dt; s.y += s.vy*dt;
+  }
+}
+
+// ---------- 空間ハッシュ ----------
+var grid = new Map();
+var cellSize = 32;
+
+function gridKey(cx, cy){ return (cx+2048)*4096 + (cy+2048); }
+
+function buildGrid(){
+  grid.clear();
+  var maxR = 1;
+  for (var i=0;i<balls.length;i++){ if (balls[i].r > maxR) maxR = balls[i].r; }
+  cellSize = maxR*2.0001;
+  for (var k=0;k<balls.length;k++){
+    var b = balls[k];
+    var key = gridKey(Math.floor(b.x/cellSize), Math.floor(b.y/cellSize));
+    var arr = grid.get(key);
+    if (arr === undefined){ arr = []; grid.set(key, arr); }
+    arr.push(k);
+  }
+}
+
+// ---------- 衝突解決 ----------
+function resolvePair(a, b){
+  var dx = b.x - a.x, dy = b.y - a.y;
+  var rs = a.r + b.r;
+  var d2 = dx*dx + dy*dy;
+  if (d2 >= rs*rs) return;
+
+  var d = Math.sqrt(d2);
+  if (d < 1e-6){ d = 1e-6; dx = 1; dy = 0; }
+  var nx = dx/d, ny = dy/d;
+
+  var invSum = a.invM + b.invM;
+  if (invSum <= 0) return;
+
+  frameCollisions++;
+
+  // 位置補正
+  var corr = (rs - d) * 0.8 / invSum;
+  a.x -= nx*corr*a.invM; a.y -= ny*corr*a.invM;
+  b.x += nx*corr*b.invM; b.y += ny*corr*b.invM;
+
+  // 法線方向の相対速度
+  var rvx = b.vx - a.vx, rvy = b.vy - a.vy;
+  var vn = rvx*nx + rvy*ny;
+  if (vn > 0) return;
+
+  var e = Math.min(a.rest, b.rest);
+  var jn = -(1+e)*vn / invSum;
+  a.vx -= nx*jn*a.invM; a.vy -= ny*jn*a.invM;
+  b.vx += nx*jn*b.invM; b.vy += ny*jn*b.invM;
+
+  // 摩擦
+  var tx = -ny, ty = nx;
+  var vt = (b.vx - a.vx)*tx + (b.vy - a.vy)*ty;
+  var jt = -vt / invSum;
+  var mu = Math.sqrt(a.fric * b.fric);
+  var maxJt = mu * Math.abs(jn);
+  if (jt > maxJt) jt = maxJt; else if (jt < -maxJt) jt = -maxJt;
+  a.vx -= tx*jt*a.invM; a.vy -= ty*jt*a.invM;
+  b.vx += tx*jt*b.invM; b.vy += ty*jt*b.invM;
+
+  var impact = -vn;
+  if (impact > 170) spawnSparks((a.x+b.x)*0.5, (a.y+b.y)*0.5, impact, nx, ny);
+}
+
+function collide(){
+  var n = balls.length;
+  for (var i=0;i<n;i++){
+    var a = balls[i];
+    var cx = Math.floor(a.x/cellSize), cy = Math.floor(a.y/cellSize);
+    for (var ox=-1; ox<=1; ox++){
+      for (var oy=-1; oy<=1; oy++){
+        var arr = grid.get(gridKey(cx+ox, cy+oy));
+        if (arr === undefined) continue;
+        for (var t=0;t<arr.length;t++){
+          var j = arr[t];
+          if (j <= i) continue;
+          resolvePair(a, balls[j]);
+        }
+      }
+    }
+  }
+}
+
+// ---------- 障害物との衝突 ----------
+function resolveStatic(b, nx, ny, overlap, rest, fric){
+  b.x += nx*overlap; b.y += ny*overlap;
+  var vn = b.vx*nx + b.vy*ny;
+  if (vn < 0){
+    var jn = -(1+rest)*vn;
+    b.vx += nx*jn; b.vy += ny*jn;
+    var tx = -ny, ty = nx;
+    var vt = b.vx*tx + b.vy*ty;
+    var jt = -vt;
+    var maxJt = fric*Math.abs(jn);
+    if (jt > maxJt) jt = maxJt; else if (jt < -maxJt) jt = -maxJt;
+    b.vx += tx*jt; b.vy += ty*jt;
+    frameCollisions++;
+  }
+}
+
+function collideObstacles(b){
+  for (var i=0;i<obstacles.length;i++){
+    var o = obstacles[i];
+    if (o.type === 'circle'){
+      var dx = b.x - o.x, dy = b.y - o.y;
+      var rs = b.r + o.r;
+      var d2 = dx*dx + dy*dy;
+      if (d2 < rs*rs){
+        var d = Math.sqrt(d2);
+        if (d < 1e-6){ dx = 0; dy = -1; d = 1e-6; } else { dx /= d; dy /= d; }
+        resolveStatic(b, dx, dy, rs - d, 0.5, 0.30);
+      }
+    } else {
+      var ex = o.x2 - o.x1, ey = o.y2 - o.y1;
+      var len2 = ex*ex + ey*ey;
+      var t = 0;
+      if (len2 > 0) t = ((b.x - o.x1)*ex + (b.y - o.y1)*ey) / len2;
+      if (t < 0) t = 0; else if (t > 1) t = 1;
+      var px = o.x1 + ex*t, py = o.y1 + ey*t;
+      var nx = b.x - px, ny = b.y - py;
+      var rr = b.r + o.r;
+      var dd = Math.sqrt(nx*nx + ny*ny);
+      if (dd < rr){
+        if (dd < 1e-6){ nx = 0; ny = -1; dd = 1e-6; } else { nx /= dd; ny /= dd; }
+        resolveStatic(b, nx, ny, rr - dd, 0.45, 0.35);
+      }
+    }
+  }
+}
+
+// ---------- 物理ステップ ----------
+function physicsStep(dt){
+  // つかんでいるボールのマップ
+  grabbedMap.clear();
+  fieldPts.length = 0;
+  pointers.forEach(function(p){
+    if (p.mode === 'grab' && p.ball) grabbedMap.set(p.ball, p);
+    else if (p.mode === 'field') fieldPts.push(p);
+  });
+
+  var gxs = gx, gys = gy;
+  var damp = 1 - 0.7*dt;
+  var attractSign = (mode === 'attract') ? 1 : -1;
+  var R = FIELD_R;
+
+  for (var i=0;i<balls.length;i++){
+    var b = balls[i];
+
+    // ドラッグ中: ポインタへ追従
+    var gp = grabbedMap.get(b);
+    if (gp){
+      var ox = b.x, oy = b.y;
+      b.x += (gp.x - b.x)*0.45;
+      b.y += (gp.y - b.y)*0.45;
+      b.vx = (b.x - ox)/dt;
+      b.vy = (b.y - oy)/dt;
+      b.speed = Math.sqrt(b.vx*b.vx + b.vy*b.vy);
+      continue;
+    }
+
+    // 重力
+    b.vx += gxs*dt;
+    b.vy += gys*dt;
+
+    // 力場(引力/斥力)
+    for (var f=0; f<fieldPts.length; f++){
+      var p = fieldPts[f];
+      var fx = p.x - b.x, fy = p.y - b.y;
+      var fd = Math.sqrt(fx*fx + fy*fy);
+      if (fd < 1e-4){ fd = 1e-4; fx = 0; fy = 0; }
+      if (fd < R){
+        var fall = 1 - fd/R;
+        var acc = FIELD_ACC * fall * attractSign;
+        b.vx += (fx/fd)*acc*dt;
+        b.vy += (fy/fd)*acc*dt;
+      }
+    }
+
+    // 空気抵抗
+    b.vx *= damp;
+    b.vy *= damp;
+
+    // 積分
+    b.x += b.vx*dt;
+    b.y += b.vy*dt;
+
+    // 壁
+    if (b.x < b.r){ b.x = b.r; if (b.vx < 0){ b.vx = -b.vx*WALL_REST; b.vy *= 0.99; frameCollisions++; } }
+    else if (b.x > W - b.r){ b.x = W - b.r; if (b.vx > 0){ b.vx = -b.vx*WALL_REST; b.vy *= 0.99; frameCollisions++; } }
+    if (b.y < b.r){ b.y = b.r; if (b.vy < 0){ b.vy = -b.vy*WALL_REST; b.vx *= 0.99; frameCollisions++; } }
+    else if (b.y > H - b.r){ b.y = H - b.r; if (b.vy > 0){ b.vy = -b.vy*WALL_REST; b.vx *= 0.99; frameCollisions++; } }
+
+    // 障害物
+    collideObstacles(b);
+
+    b.speed = Math.sqrt(b.vx*b.vx + b.vy*b.vy);
+  }
+
+  buildGrid();
+  collide();
+  updateSparks(dt);
+}
+
+// ---------- 描画 ----------
+function drawObstacles(){
+  for (var i=0;i<obstacles.length;i++){
+    var o = obstacles[i];
+    if (o.type === 'circle'){
+      ctx.beginPath();
+      ctx.arc(o.x, o.y, o.r, 0, 6.283185307);
+      ctx.fillStyle = '#1b2436';
+      ctx.fill();
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = '#3d5a80';
+      ctx.stroke();
+    } else {
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(o.x1, o.y1);
+      ctx.lineTo(o.x2, o.y2);
+      ctx.lineWidth = o.r*2;
+      ctx.strokeStyle = '#1b2436';
+      ctx.stroke();
+      ctx.lineWidth = Math.max(1, o.r*0.55);
+      ctx.strokeStyle = '#3d5a80';
+      ctx.stroke();
+    }
+  }
+}
+
+function render(){
+  // トレイル用のフェード
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = 'rgba(9,11,20,0.28)';
+  ctx.fillRect(0, 0, W, H);
+
+  drawObstacles();
+
+  // 火花
+  ctx.globalCompositeOperation = 'lighter';
+  for (var i=0;i<sparks.length;i++){
+    var s = sparks[i];
+    ctx.globalAlpha = Math.min(1, s.life*2.4);
+    ctx.fillStyle = '#ffd27a';
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, s.r, 0, 6.283185307);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = 'source-over';
+
+  // ボール(速度で色変化)
+  for (var k=0;k<balls.length;k++){
+    var b = balls[k];
+    var t = b.speed/1500;
+    if (t > 1) t = 1;
+    var hue = 215 - 215*t;
+    var light = 52 + 18*(1-t);
+    ctx.fillStyle = 'hsl(' + hue.toFixed(1) + ',85%,' + light.toFixed(1) + '%)';
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, b.r, 0, 6.283185307);
+    ctx.fill();
+    if (b.r > 7){
+      ctx.fillStyle = 'rgba(255,255,255,0.32)';
+      ctx.beginPath();
+      ctx.arc(b.x - b.r*0.30, b.y - b.r*0.30, b.r*0.32, 0, 6.283185307);
+      ctx.fill();
+    }
+  }
+
+  // 操作インジケータ
+  pointers.forEach(function(p){
+    if (p.mode === 'field'){
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, FIELD_R, 0, 6.283185307);
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = (mode === 'attract') ? 'rgba(90,200,255,0.55)' : 'rgba(255,120,120,0.55)';
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 4, 0, 6.283185307);
+      ctx.fillStyle = (mode === 'attract') ? 'rgba(90,200,255,0.9)' : 'rgba(255,120,120,0.9)';
+      ctx.fill();
+    } else if (p.mode === 'grab' && p.ball){
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y);
+      ctx.lineTo(p.ball.x, p.ball.y);
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+      ctx.stroke();
+    }
+  });
+}
+
+// ---------- 統計 ----------
+function fmt(n){
+  if (!isFinite(n)) return '0';
+  if (n >= 1e9) return (n/1e9).toFixed(2) + 'G';
+  if (n >= 1e6) return (n/1e6).toFixed(2) + 'M';
+  if (n >= 1e3) return (n/1e3).toFixed(2) + 'k';
+  return n.toFixed(0);
+}
+
+var statTimer = 0;
+function updateStats(dt){
+  var inst = dt > 0 ? 1/dt : 60;
+  fpsSmooth = fpsSmooth*0.9 + inst*0.1;
+
+  statTimer += dt;
+  if (statTimer < 0.12) return;
+  statTimer = 0;
+
+  stats.fps = Math.round(fpsSmooth);
+  stats.count = balls.length;
+  stats.collisions = frameCollisions;
+
+  var ke = 0, pe = 0;
+  var gm = Math.sqrt(gx*gx + gy*gy);
+  for (var i=0;i<balls.length;i++){
+    var b = balls[i];
+    ke += 0.5*b.m*(b.vx*b.vx + b.vy*b.vy);
+    pe += b.m*gm*(H - b.y);
+  }
+  stats.energy = ke + pe;
+
+  fpsEl.textContent = stats.fps;
+  cntEl.textContent = stats.count;
+  colEl.textContent = frameCollisions;
+  engEl.textContent = fmt(stats.energy);
+}
+
+// ---------- リサイズ ----------
+function resize(){
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = window.innerWidth;
+  H = window.innerHeight;
+  canvas.width = Math.floor(W*DPR);
+  canvas.height = Math.floor(H*DPR);
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.fillStyle = '#090b14';
+  ctx.fillRect(0, 0, W, H);
+  FIELD_R = Math.max(90, Math.min(W, H)*0.30);
+  updateObstacles();
+}
+
+// ---------- ポインタ操作 ----------
+function localPos(e){
+  var r = canvas.getBoundingClientRect();
+  return { x: e.clientX - r.left, y: e.clientY - r.top };
+}
+
+function findBall(px, py){
+  var hit = null, best = Infinity;
+  for (var i=balls.length-1;i>=0;i--){
+    var b = balls[i];
+    var dx = b.x - px, dy = b.y - py;
+    var rr = b.r + 16;
+    var d2 = dx*dx + dy*dy;
+    if (d2 < rr*rr && d2 < best){ best = d2; hit = b; }
+  }
+  return hit;
+}
+
+canvas.addEventListener('pointerdown', function(e){
+  e.preventDefault();
+  try { if (canvas.setPointerCapture) canvas.setPointerCapture(e.pointerId); } catch(err){}
+  var p = localPos(e);
+  var hit = findBall(p.x, p.y);
+  var st = {
+    x:p.x, y:p.y, startX:p.x, startY:p.y,
+    t: performance.now(),
+    mode: hit ? 'grab' : 'field',
+    ball: hit || null,
+    savedInvM: hit ? hit.invM : 0
+  };
+  if (hit) hit.invM = 0;
+  pointers.set(e.pointerId, st);
+}, { passive:false });
+
+canvas.addEventListener('pointermove', function(e){
+  var st = pointers.get(e.pointerId);
+  if (!st) return;
+  e.preventDefault();
+  var p = localPos(e);
+  st.x = p.x; st.y = p.y;
+}, { passive:false });
+
+function endPointer(e){
+  var st = pointers.get(e.pointerId);
+  if (!st) return;
+  if (st.mode === 'grab' && st.ball){
+    // 投げる: つかみ解除時に速度を少し抑制
+    var b = st.ball;
+    b.invM = st.savedInvM;
+    b.vx *= 0.85;
+    b.vy *= 0.85;
+  } else {
+    var dtms = performance.now() - st.t;
+    var dx = st.x - st.startX, dy = st.y - st.startY;
+    if (dtms < 260 && dx*dx + dy*dy < 14*14){
+      spawn(st.x, st.y);           // タップで生成
+    }
+  }
+  pointers.delete(e.pointerId);
+}
+
+canvas.addEventListener('pointerup', endPointer);
+canvas.addEventListener('pointercancel', function(e){
+  var st = pointers.get(e.pointerId);
+  if (st && st.mode === 'grab' && st.ball) st.ball.invM = st.savedInvM;
+  pointers.delete(e.pointerId);
+});
+canvas.addEventListener('contextmenu', function(e){ e.preventDefault(); });
+
+// ---------- 重力モード ----------
+function clamp(v, a, b){ return v < a ? a : (v > b ? b : v); }
+
+function onOrient(e){
+  if (gravityMode !== 'tilt') return;
+  var g = (e.gamma == null) ? 0 : e.gamma;
+  var bt = (e.beta == null) ? 0 : e.beta;
+  gx = (clamp(g, -45, 45)/45) * G0;
+  gy = (clamp(bt, -45, 45)/45) * G0;
+}
+
+function updateGravBtn(){
+  var label = { down:'下', up:'上', none:'無', tilt:'傾き' }[gravityMode] || '下';
+  bGrav.textContent = '重力: ' + label;
+  bGrav.classList.toggle('on', gravityMode !== 'down');
+}
+
+function requestTilt(){
+  try {
+    var DOE = window.DeviceOrientationEvent;
+    if (!DOE){ setGravity('down'); return; }
+    if (typeof DOE.requestPermission === 'function'){
+      DOE.requestPermission().then(function(res){
+        if (res === 'granted'){
+          window.addEventListener('deviceorientation', onOrient, true);
+        } else {
+          setGravity('down');
+        }
+      }).catch(function(){ setGravity('down'); });
+    } else {
+      window.addEventListener('deviceorientation', onOrient, true);
+    }
+  } catch (err){
+    setGravity('down');
+  }
+}
+
+function setGravity(m){
+  gravityMode = m;
+  if (m === 'down'){ gx = 0; gy = G0; }
+  else if (m === 'up'){ gx = 0; gy = -G0; }
+  else if (m === 'none'){ gx = 0; gy = 0; }
+  else if (m === 'tilt'){ requestTilt(); }
+  updateGravBtn();
+}
+
+var gravOrder = ['down', 'up', 'none', 'tilt'];
+bGrav.addEventListener('click', function(){
+  var idx = gravOrder.indexOf(gravityMode);
+  setGravity(gravOrder[(idx+1) % gravOrder.length]);
+});
+
+bMode.addEventListener('click', function(){
+  mode = (mode === 'attract') ? 'repel' : 'attract';
+  bMode.textContent = 'モード: ' + (mode === 'attract' ? '引力' : '斥力');
+  bMode.classList.toggle('on', mode === 'repel');
+});
+
+bMass.addEventListener('click', function(){ spawnMany(150); });
+bClear.addEventListener('click', function(){ clearAll(); });
+
+window.addEventListener('resize', resize);
+window.addEventListener('orientationchange', function(){ setTimeout(resize, 250); });
+
+// ---------- メインループ ----------
+var last = 0, accum = 0;
+
+function frame(now){
+  requestAnimationFrame(frame);
+  if (last === 0) last = now;
+  var ft = (now - last)/1000;
+  last = now;
+  if (ft < 0) ft = 0;
+  if (ft > 0.1) ft = 0.1;
+
+  accum += ft;
+  frameCollisions = 0;
+  var steps = 0;
+  while (accum >= FIXED && steps < 10){
+    physicsStep(FIXED);
+    accum -= FIXED;
+    steps++;
+  }
+  if (steps >= 10) accum = 0;
+
+  render();
+  updateStats(ft);
+}
+
+// ---------- 初期化 ----------
+resize();
+spawnMany(70);
+updateGravBtn();
+bMode.textContent = 'モード: 引力';
+
+// ---------- デバッグ公開 ----------
+window.__sim = {
+  balls: balls,
+  stats: stats,
+  step: function(dt){ physicsStep(dt || FIXED); },
+  spawn: function(x, y, r){ return spawn(x, y, r); },
+  spawnMany: function(n){ spawnMany(n || 100); },
+  clear: clearAll,
+  setGravity: setGravity,
+  setMode: function(m){ mode = (m === 'repel') ? 'repel' : 'attract'; }
+};
+
+requestAnimationFrame(frame);
+
+})();
+</script>
+</body>
+</html>

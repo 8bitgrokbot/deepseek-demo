@@ -1,0 +1,1377 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mini 言語 インタプリタ</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#0f1420; --panel2:#0b0f18; --border:#26324a;
+    --fg:#e6edf3; --muted:#8b9ac0; --accent:#4da3ff; --accent2:#2ea043;
+    --err:#ff6b6b; --warn:#ffb454; --ok:#3fb950; --lg:#5b6b8c;
+    --lh:24px; --pad:12px; --gut:44px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:linear-gradient(180deg,#0d1117,#0a0e15 60%);
+    color:var(--fg);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Hiragino Sans","Hiragino Kaku Gothic ProN",Meiryo,sans-serif;
+    font-size:16px; line-height:1.6; min-height:100vh;
+  }
+  header{padding:16px 18px 8px;max-width:1200px;margin:0 auto;width:100%}
+  h1{font-size:20px;margin:0 0 4px}
+  h1 .badge{font-size:12px;background:var(--accent);color:#06101f;border-radius:6px;padding:2px 7px;margin-left:8px;vertical-align:middle}
+  .sub{color:var(--muted);font-size:13px;margin:0}
+  main{max-width:1200px;margin:0 auto;width:100%;padding:12px 18px 40px;
+    display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .pane{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:12px;min-width:0}
+  .toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px}
+  select,button{font-size:16px;font-family:inherit;border-radius:9px;border:1px solid var(--border);
+    background:#16203a;color:var(--fg);padding:9px 12px;cursor:pointer;-webkit-appearance:none;appearance:none}
+  select{max-width:100%}
+  button:hover{background:#1d2b4a}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#06101f;font-weight:700}
+  button.primary:hover{filter:brightness(1.08)}
+  button.ghost{background:transparent}
+  .editor-wrap{position:relative;display:flex;height:380px;border:1px solid var(--border);
+    border-radius:10px;overflow:hidden;background:var(--panel2)}
+  .gutter{flex:0 0 var(--gut);width:var(--gut);padding:var(--pad) 8px var(--pad) 0;text-align:right;
+    color:var(--lg);background:#080c14;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    font-size:16px;line-height:var(--lh);user-select:none;overflow:auto;scrollbar-width:none}
+  .gutter::-webkit-scrollbar{display:none}
+  .gutter .ln.err{color:#fff;background:rgba(255,80,80,.35);border-radius:4px}
+  #lineHighlight{position:absolute;left:var(--gut);right:0;height:var(--lh);top:0;
+    background:rgba(255,80,80,.16);pointer-events:none;display:none;z-index:2;
+    border-top:1px solid rgba(255,80,80,.35);border-bottom:1px solid rgba(255,80,80,.35)}
+  #code{flex:1;min-width:0;height:100%;padding:var(--pad);border:0;outline:0;resize:none;
+    background:transparent;color:var(--fg);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    font-size:16px;line-height:var(--lh);tab-size:2;position:relative;z-index:1;overflow:auto}
+  .out-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+  .out-head h2{font-size:14px;margin:0;color:var(--muted);font-weight:600;letter-spacing:.03em}
+  #time{font-size:12px;color:var(--muted)}
+  #output{margin:0;background:#080c14;border:1px solid var(--border);border-radius:10px;padding:12px;
+    min-height:180px;max-height:300px;overflow:auto;white-space:pre-wrap;word-break:break-word;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:15px;line-height:1.5}
+  #error{display:none;margin-top:10px;background:rgba(255,80,80,.1);border:1px solid rgba(255,80,80,.5);
+    color:#ffb3b3;border-radius:10px;padding:10px 12px;font-size:14px;white-space:pre-wrap;word-break:break-word}
+  #error.show{display:block}
+  #tests{margin-top:18px}
+  #tests h2{font-size:15px;margin:0 0 10px}
+  .test-summary{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+  .pill{font-size:14px;padding:6px 12px;border-radius:999px;border:1px solid var(--border)}
+  .pill.ok{color:var(--ok);border-color:rgba(63,185,80,.5)}
+  .pill.ng{color:var(--err);border-color:rgba(255,80,80,.5)}
+  .test-list{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .test-item{display:flex;gap:8px;font-size:13px;padding:6px 9px;border-radius:8px;background:#0b1220;border:1px solid #1a2338}
+  .test-item .mark{flex:0 0 auto;font-weight:700}
+  .test-item.ok .mark{color:var(--ok)}
+  .test-item.ng .mark{color:var(--err)}
+  .test-item.ng{background:rgba(255,80,80,.07);border-color:rgba(255,80,80,.3)}
+  .test-item .detail{color:var(--muted);font-size:12px;display:block;margin-top:2px;white-space:pre-wrap;word-break:break-word}
+  details.help{margin-top:16px;background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:10px 14px}
+  details.help summary{cursor:pointer;font-size:14px;color:var(--muted)}
+  details.help code{background:#080c14;padding:1px 5px;border-radius:5px}
+  footer{max-width:1200px;margin:0 auto;padding:0 18px 30px;color:var(--muted);font-size:12px}
+  @media (max-width:820px){
+    main{grid-template-columns:1fr}
+    .editor-wrap{height:300px}
+    #output{max-height:240px}
+    .test-list{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Mini 言語 インタプリタ <span class="badge">自作パーサ内蔵</span></h1>
+  <p class="sub">外部ライブラリ・eval 不使用。字句解析 → 再帰下降/Pratt 構文解析 → AST 評価をすべてブラウザ内で実行します。</p>
+</header>
+
+<main>
+  <section class="pane">
+    <div class="toolbar">
+      <select id="samples" aria-label="サンプルプログラム"></select>
+      <button id="run" class="primary" type="button">▶ 実行 (Ctrl+Enter)</button>
+      <button id="runTests" type="button">✔ テスト実行</button>
+      <button id="clear" class="ghost" type="button">クリア</button>
+    </div>
+    <div class="editor-wrap">
+      <div id="lineHighlight"></div>
+      <div class="gutter" id="gutter"></div>
+      <textarea id="code" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off" wrap="off"></textarea>
+    </div>
+    <p class="sub" style="margin-top:8px">Tab でインデント / Shift+Tab で戻す。コメントは <code>#</code>。</p>
+  </section>
+
+  <section class="pane">
+    <div class="out-head">
+      <h2>出力</h2>
+      <span id="time"></span>
+    </div>
+    <pre id="output"></pre>
+    <div id="error"></div>
+
+    <section id="tests">
+      <h2>組み込みテストスイート</h2>
+      <div id="testSummary" class="test-summary"></div>
+      <div id="testList" class="test-list"></div>
+    </section>
+  </section>
+</main>
+
+<details class="help" style="max-width:1200px;margin:0 auto 30px;width:calc(100% - 36px)">
+  <summary>Mini 言語の仕様（クリックで展開）</summary>
+  <p style="font-size:14px">
+    データ型: 数値 / 文字列 / 真偽値 / nil / リスト / 関数。偽とみなされるのは <code>false</code> と <code>nil</code> のみ。<br>
+    宣言: <code>let x = 10</code>　関数: <code>fn add(a,b){ return a+b }</code>（無名関数も可）<br>
+    制御: <code>if/else if/else</code>, <code>while cond { }</code>, <code>for x in list { }</code>, <code>break</code>, <code>continue</code>, <code>return</code><br>
+    演算子の優先順位（低→高）: <code>or</code> &lt; <code>and</code> &lt; <code>not</code> &lt; <code>== !=</code> &lt; <code>&lt; &lt;= &gt; &gt;=</code> &lt; <code>+ -</code> &lt; <code>* / %</code> &lt; <code>**</code>（右結合）&lt; 単項 <code>-</code><br>
+    組み込み: <code>print, len, push, range, str, num, map, filter, reduce, sort, join</code><br>
+    安全装置: 実行ステップ上限、再帰スタック深さ上限、行・列付きエラー。
+  </p>
+</details>
+
+<footer>Mini language playground — single file, no dependencies.</footer>
+
+<script>
+"use strict";
+
+/* ============================================================
+ * 1. エラー型
+ * ============================================================ */
+class MiniError extends Error{
+  constructor(message, line, col, stage){
+    super(message);
+    this.name = "MiniError";
+    this.line = (line === undefined) ? null : line;
+    this.col = (col === undefined) ? null : col;
+    this.stage = stage || "runtime"; // "syntax" | "runtime"
+  }
+}
+function syntaxError(msg, line, col){ return new MiniError(msg, line, col, "syntax"); }
+
+/* ============================================================
+ * 2. 字句解析器 (Lexer)
+ * ============================================================ */
+function isDigit(c){ return c >= "0" && c <= "9"; }
+function isIdentStart(c){
+  return (c >= "a" && c <= "z") || (c >= "A" && c <= "Z") || c === "_" || c === "$" || c.charCodeAt(0) > 127;
+}
+function isIdentPart(c){ return isIdentStart(c) || isDigit(c); }
+
+function tokenize(src){
+  const tokens = [];
+  let i = 0, line = 1, col = 1;
+  const n = src.length;
+  function push(type, value, ln, cl){ tokens.push({type:type, value:value, line:ln, col:cl}); }
+
+  while(i < n){
+    const c = src[i];
+    if(c === "\n"){ i++; line++; col = 1; continue; }
+    if(c === " " || c === "\t" || c === "\r"){ i++; col++; continue; }
+    if(c === "#"){ while(i < n && src[i] !== "\n"){ i++; col++; } continue; }
+
+    const sl = line, sc = col;
+
+    // 数値リテラル（整数・小数・指数）
+    if(isDigit(c) || (c === "." && isDigit(src[i+1]))){
+      let s = "";
+      while(i < n && isDigit(src[i])){ s += src[i++]; col++; }
+      if(src[i] === "." && isDigit(src[i+1])){
+        s += "."; i++; col++;
+        while(i < n && isDigit(src[i])){ s += src[i++]; col++; }
+      }
+      if(src[i] === "e" || src[i] === "E"){
+        let k = i + 1, sign = "";
+        if(src[k] === "+" || src[k] === "-"){ sign = src[k]; k++; }
+        if(isDigit(src[k])){
+          s += "e" + sign;
+          i = k;
+          while(i < n && isDigit(src[i])){ s += src[i++]; col++; }
+          col += 1 + sign.length;
+        }
+      }
+      push("NUMBER", parseFloat(s), sl, sc);
+      continue;
+    }
+
+    // 文字列リテラル
+    if(c === '"' || c === "'"){
+      const quote = c; i++; col++;
+      let s = "";
+      let closed = false;
+      while(i < n){
+        const ch = src[i];
+        if(ch === quote){ i++; col++; closed = true; break; }
+        if(ch === "\\"){
+          const e = src[i+1];
+          const map = { "n":"\n", "t":"\t", "r":"\r", "\\":"\\", '"':'"', "'":"'", "0":"\0" };
+          if(Object.prototype.hasOwnProperty.call(map, e)){ s += map[e]; }
+          else if(e === undefined){ i++; break; }
+          else { s += e; }
+          i += 2; col += 2;
+          continue;
+        }
+        if(ch === "\n"){
+          throw syntaxError("文字列リテラルが改行される前に閉じられていません", sl, sc);
+        }
+        s += ch; i++; col++;
+      }
+      if(!closed) throw syntaxError("文字列リテラルが閉じられていません", sl, sc);
+      push("STRING", s, sl, sc);
+      continue;
+    }
+
+    // 識別子・予約語
+    if(isIdentStart(c)){
+      let s = "";
+      while(i < n && isIdentPart(src[i])){ s += src[i++]; col++; }
+      push("IDENT", s, sl, sc);
+      continue;
+    }
+
+    // 2文字演算子
+    const two = src.substr(i, 2);
+    if(two === "**" || two === "==" || two === "!=" || two === "<=" || two === ">="){
+      push("OP", two, sl, sc); i += 2; col += 2; continue;
+    }
+    // 1文字
+    if("+-*/%<>=(),[]{};".indexOf(c) >= 0){
+      push("OP", c, sl, sc); i++; col++; continue;
+    }
+
+    throw syntaxError("解釈できない文字 '" + c + "' です", sl, sc);
+  }
+
+  push("EOF", null, line, col);
+  return tokens;
+}
+
+/* ============================================================
+ * 3. 構文解析器 (Pratt / 再帰下降)
+ * ============================================================ */
+function describeToken(t){
+  if(!t || t.type === "EOF") return "入力の終わり";
+  return "'" + t.value + "'";
+}
+
+class Parser{
+  constructor(tokens){ this.tokens = tokens; this.pos = 0; }
+  peek(){ return this.tokens[this.pos]; }
+  peekAt(k){ return this.tokens[Math.min(this.pos + k, this.tokens.length - 1)]; }
+  next(){ return this.tokens[this.pos++]; }
+  check(type, value){
+    const t = this.peek();
+    return t.type === type && (value === undefined || t.value === value);
+  }
+  match(type, value){ if(this.check(type, value)){ this.pos++; return true; } return false; }
+  expect(type, value, msg){
+    if(this.check(type, value)) return this.next();
+    const t = this.peek();
+    throw syntaxError(msg || (describeToken(t) + " ではなく " + (value !== undefined ? "'" + value + "'" : type) + " が期待されます"), t.line, t.col);
+  }
+  skipSemicolons(){ while(this.check("OP", ";")) this.next(); }
+
+  parseProgram(){
+    const body = [];
+    while(!this.check("EOF")){
+      if(this.match("OP", ";")) continue;
+      body.push(this.parseStatement());
+    }
+    return {type:"Program", body:body, line:1};
+  }
+
+  parseStatement(){
+    const t = this.peek();
+    if(this.check("IDENT", "let")) return this.parseLet();
+    if(this.check("IDENT", "fn") && this.peekAt(1).type === "IDENT"
+       && this.peekAt(2).type === "OP" && this.peekAt(2).value === "("){
+      return this.parseFnDecl();
+    }
+    if(this.check("IDENT", "if")) return this.parseIf();
+    if(this.check("IDENT", "while")) return this.parseWhile();
+    if(this.check("IDENT", "for")) return this.parseFor();
+    if(this.check("IDENT", "return")) return this.parseReturn();
+    if(this.check("IDENT", "break")){ this.next(); return {type:"Break", line:t.line}; }
+    if(this.check("IDENT", "continue")){ this.next(); return {type:"Continue", line:t.line}; }
+    if(this.check("OP", "{")) return this.parseBlock();
+    return this.parseExprOrAssign();
+  }
+
+  parseLet(){
+    const t = this.next();
+    const name = this.expect("IDENT", undefined, "変数名が期待されます");
+    this.expect("OP", "=", "'=' が期待されます");
+    const init = this.parseExpression(0);
+    this.skipSemicolons();
+    return {type:"Let", name:name.value, init:init, line:t.line};
+  }
+
+  parseFnDecl(){
+    const t = this.next();
+    const name = this.next();
+    const params = this.parseParams();
+    const body = this.parseBlock();
+    this.skipSemicolons();
+    return {type:"FnDecl", name:name.value, params:params, body:body, line:t.line};
+  }
+
+  parseParams(){
+    this.expect("OP", "(", "'(' が期待されます");
+    const params = [];
+    if(!this.check("OP", ")")){
+      do{
+        const p = this.expect("IDENT", undefined, "引数名が期待されます");
+        params.push(p.value);
+      }while(this.match("OP", ","));
+    }
+    this.expect("OP", ")", "')' が期待されます");
+    return params;
+  }
+
+  parseBlock(){
+    const t = this.expect("OP", "{", "'{' が期待されます");
+    const body = [];
+    while(!this.check("OP", "}") && !this.check("EOF")){
+      if(this.match("OP", ";")) continue;
+      body.push(this.parseStatement());
+    }
+    this.expect("OP", "}", "'}' が期待されます");
+    return {type:"Block", body:body, line:t.line};
+  }
+
+  parseIf(){
+    const t = this.next();
+    const cond = this.parseExpression(0);
+    const then = this.parseBlock();
+    let els = null;
+    if(this.check("IDENT", "else")){
+      this.next();
+      if(this.check("IDENT", "if")) els = this.parseIf();
+      else els = this.parseBlock();
+    }
+    return {type:"If", cond:cond, then:then, else:els, line:t.line};
+  }
+
+  parseWhile(){
+    const t = this.next();
+    const cond = this.parseExpression(0);
+    const body = this.parseBlock();
+    return {type:"While", cond:cond, body:body, line:t.line};
+  }
+
+  parseFor(){
+    const t = this.next();
+    const name = this.expect("IDENT", undefined, "ループ変数名が期待されます");
+    this.expect("IDENT", "in", "'in' が期待されます");
+    const iter = this.parseExpression(0);
+    const body = this.parseBlock();
+    return {type:"For", name:name.value, iter:iter, body:body, line:t.line};
+  }
+
+  parseReturn(){
+    const t = this.next();
+    let value = null;
+    const nx = this.peek();
+    const isEnd = nx.type === "EOF" || (nx.type === "OP" && (nx.value === "}" || nx.value === ";"));
+    if(!isEnd && nx.line === t.line){
+      value = this.parseExpression(0);
+    }
+    this.skipSemicolons();
+    return {type:"Return", value:value, line:t.line};
+  }
+
+  parseExprOrAssign(){
+    const expr = this.parseExpression(0);
+    if(this.check("OP", "=")){
+      const t = this.next();
+      const value = this.parseExpression(0);
+      if(expr.type !== "Variable" && expr.type !== "Index"){
+        throw syntaxError("代入の左辺には変数かリスト要素を指定してください", expr.line, null);
+      }
+      this.skipSemicolons();
+      return {type:"Assign", target:expr, value:value, line:t.line};
+    }
+    this.skipSemicolons();
+    return {type:"ExprStmt", expr:expr, line:expr.line};
+  }
+
+  binaryBP(t){
+    if(t.type === "IDENT" && t.value === "or") return 1;
+    if(t.type === "IDENT" && t.value === "and") return 2;
+    if(t.type === "OP"){
+      switch(t.value){
+        case "==": case "!=": return 3;
+        case "<": case "<=": case ">": case ">=": return 4;
+        case "+": case "-": return 5;
+        case "*": case "/": case "%": return 6;
+        case "**": return 7;
+      }
+    }
+    return 0;
+  }
+
+  parseExpression(minBP){
+    let left = this.parseUnary();
+    while(true){
+      const t = this.peek();
+      const bp = this.binaryBP(t);
+      if(bp === 0 || bp <= minBP) break;
+      this.next();
+      const right = this.parseExpression(t.value === "**" ? bp - 1 : bp);
+      left = {type:"Binary", op:t.value, left:left, right:right, line:t.line};
+    }
+    return left;
+  }
+
+  parseUnary(){
+    const t = this.peek();
+    if(t.type === "OP" && t.value === "-"){
+      this.next();
+      return {type:"Unary", op:"-", operand:this.parseExpression(6), line:t.line};
+    }
+    if(t.type === "OP" && t.value === "+"){
+      this.next();
+      return {type:"Unary", op:"+", operand:this.parseExpression(6), line:t.line};
+    }
+    if(t.type === "IDENT" && t.value === "not"){
+      this.next();
+      return {type:"Unary", op:"not", operand:this.parseExpression(2), line:t.line};
+    }
+    return this.parsePostfix(this.parsePrimary());
+  }
+
+  parsePostfix(left){
+    while(true){
+      if(this.check("OP", "(")){
+        this.next();
+        const args = [];
+        if(!this.check("OP", ")")){
+          do{ args.push(this.parseExpression(0)); }while(this.match("OP", ","));
+        }
+        this.expect("OP", ")", "')' が期待されます");
+        left = {type:"Call", callee:left, args:args, line:left.line};
+      } else if(this.check("OP", "[")){
+        this.next();
+        const idx = this.parseExpression(0);
+        this.expect("OP", "]", "']' が期待されます");
+        left = {type:"Index", object:left, index:idx, line:left.line};
+      } else break;
+    }
+    return left;
+  }
+
+  parsePrimary(){
+    const t = this.peek();
+    if(t.type === "NUMBER" || t.type === "STRING"){
+      this.next();
+      return {type:"Literal", value:t.value, line:t.line};
+    }
+    if(t.type === "IDENT"){
+      if(t.value === "true"){ this.next(); return {type:"Literal", value:true, line:t.line}; }
+      if(t.value === "false"){ this.next(); return {type:"Literal", value:false, line:t.line}; }
+      if(t.value === "nil"){ this.next(); return {type:"Literal", value:null, line:t.line}; }
+      if(t.value === "fn") return this.parseFunctionExpr();
+      this.next();
+      return {type:"Variable", name:t.value, line:t.line};
+    }
+    if(t.type === "OP" && t.value === "("){
+      this.next();
+      const e = this.parseExpression(0);
+      this.expect("OP", ")", "')' が期待されます");
+      return e;
+    }
+    if(t.type === "OP" && t.value === "["){
+      this.next();
+      const elems = [];
+      if(!this.check("OP", "]")){
+        do{ elems.push(this.parseExpression(0)); }while(this.match("OP", ","));
+      }
+      this.expect("OP", "]", "']' が期待されます");
+      return {type:"List", elements:elems, line:t.line};
+    }
+    throw syntaxError("式が期待される位置に " + describeToken(t) + " があります", t.line, t.col);
+  }
+
+  parseFunctionExpr(){
+    const t = this.next(); // fn
+    let name = null;
+    if(this.check("IDENT") && this.peekAt(1).type === "OP" && this.peekAt(1).value === "("){
+      name = this.next().value;
+    }
+    const params = this.parseParams();
+    const body = this.parseBlock();
+    return {type:"Function", name:name, params:params, body:body, line:t.line};
+  }
+}
+
+/* ============================================================
+ * 4. 値のユーティリティ
+ * ============================================================ */
+function typeName(v){
+  if(v === null || v === undefined) return "nil";
+  if(typeof v === "number") return "数値";
+  if(typeof v === "string") return "文字列";
+  if(typeof v === "boolean") return "真偽値";
+  if(Array.isArray(v)) return "リスト";
+  if(typeof v === "function" || (v && v.__fn)) return "関数";
+  return "不明";
+}
+function truthy(v){ return v !== null && v !== false && v !== undefined; }
+function formatNumber(n){
+  if(!isFinite(n)) return n > 0 ? "inf" : (n < 0 ? "-inf" : "nan");
+  if(Number.isInteger(n)) return String(n);
+  return String(n);
+}
+function fmt(v, quote){
+  if(v === null || v === undefined) return "nil";
+  if(typeof v === "number") return formatNumber(v);
+  if(typeof v === "string"){
+    if(!quote) return v;
+    return '"' + v.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n").replace(/\t/g, "\\t") + '"';
+  }
+  if(typeof v === "boolean") return v ? "true" : "false";
+  if(Array.isArray(v)) return "[" + v.map(function(x){ return fmt(x, true); }).join(", ") + "]";
+  if(typeof v === "function") return "<組込関数>";
+  if(v && v.__fn) return "<関数" + (v.name ? " " + v.name : "") + ">";
+  return String(v);
+}
+function toDisplay(v){ return fmt(v, false); }
+function toRepr(v){ return fmt(v, true); }
+function isEqual(a, b){
+  if(a === b) return true;
+  if(a === null || b === null || a === undefined || b === undefined) return a === b;
+  if(Array.isArray(a) && Array.isArray(b)){
+    if(a.length !== b.length) return false;
+    for(let i = 0; i < a.length; i++){ if(!isEqual(a[i], b[i])) return false; }
+    return true;
+  }
+  return false;
+}
+
+/* ============================================================
+ * 5. 環境
+ * ============================================================ */
+class Env{
+  constructor(parent){ this.parent = parent || null; this.vars = new Map(); }
+  define(name, value){ this.vars.set(name, value); }
+  lookup(name){
+    let e = this;
+    while(e){ if(e.vars.has(name)) return {found:true, value:e.vars.get(name)}; e = e.parent; }
+    return {found:false};
+  }
+  assign(name, value){
+    let e = this;
+    while(e){ if(e.vars.has(name)){ e.vars.set(name, value); return true; } e = e.parent; }
+    return false;
+  }
+}
+
+/* ============================================================
+ * 6. 評価器 (Interpreter)
+ * ============================================================ */
+class Interpreter{
+  constructor(output){
+    this.output = output;
+    this.steps = 0;
+    this.maxSteps = 1000000;
+    this.depth = 0;
+    this.maxDepth = 500;
+    this.global = new Env(null);
+    this.installBuiltins();
+  }
+
+  err(msg, line, col){ return new MiniError(msg, line, col, "runtime"); }
+
+  installBuiltins(){
+    const g = this.global;
+    const self = this;
+
+    g.define("print", function(args){
+      self.output.push(args.map(toDisplay).join(" "));
+      return null;
+    });
+
+    g.define("len", function(args, line){
+      const v = args[0];
+      if(typeof v === "string" || Array.isArray(v)) return v.length;
+      throw self.err("型エラー: len は文字列かリストに使えます（" + typeName(v) + " が渡されました）", line);
+    });
+
+    g.define("push", function(args, line){
+      const arr = args[0];
+      if(!Array.isArray(arr)) throw self.err("型エラー: push の第1引数はリストである必要があります（" + typeName(arr) + "）", line);
+      arr.push(args[1]);
+      return arr;
+    });
+
+    g.define("range", function(args, line){
+      let start = 0, end, step = 1;
+      if(args.length === 1){ end = args[0]; }
+      else if(args.length === 2){ start = args[0]; end = args[1]; }
+      else if(args.length === 3){ start = args[0]; end = args[1]; step = args[2]; }
+      else throw self.err("引数エラー: range は 1〜3 個の引数を取ります（" + args.length + " 個渡されました）", line);
+      if(typeof start !== "number" || typeof end !== "number" || typeof step !== "number"){
+        throw self.err("型エラー: range の引数は数値である必要があります", line);
+      }
+      if(step === 0) throw self.err("値エラー: range のステップに 0 は使えません", line);
+      const out = [];
+      if(step > 0){ for(let i = start; i < end; i += step) out.push(i); }
+      else { for(let i = start; i > end; i += step) out.push(i); }
+      if(out.length > 1000000) throw self.err("範囲エラー: range の要素数が多すぎます", line);
+      return out;
+    });
+
+    g.define("str", function(args){ return toDisplay(args[0]); });
+
+    g.define("num", function(args, line){
+      const v = args[0];
+      if(typeof v === "number") return v;
+      if(typeof v === "boolean") return v ? 1 : 0;
+      if(typeof v === "string"){
+        const s = v.trim();
+        const n = Number(s);
+        if(s === "" || isNaN(n)) throw self.err("型エラー: '" + v + "' を数値に変換できません", line);
+        return n;
+      }
+      throw self.err("型エラー: " + typeName(v) + " を数値に変換できません", line);
+    });
+
+    g.define("map", function(args, line){
+      const arr = args[0], f = args[1];
+      if(!Array.isArray(arr)) throw self.err("型エラー: map の第1引数はリストである必要があります（" + typeName(arr) + "）", line);
+      const out = [];
+      for(let i = 0; i < arr.length; i++) out.push(self.invoke(f, [arr[i], i], line));
+      return out;
+    });
+
+    g.define("filter", function(args, line){
+      const arr = args[0], f = args[1];
+      if(!Array.isArray(arr)) throw self.err("型エラー: filter の第1引数はリストである必要があります（" + typeName(arr) + "）", line);
+      const out = [];
+      for(let i = 0; i < arr.length; i++){ if(truthy(self.invoke(f, [arr[i], i], line))) out.push(arr[i]); }
+      return out;
+    });
+
+    g.define("reduce", function(args, line){
+      const arr = args[0], f = args[1];
+      if(!Array.isArray(arr)) throw self.err("型エラー: reduce の第1引数はリストである必要があります（" + typeName(arr) + "）", line);
+      let acc, start;
+      if(args.length >= 3){ acc = args[2]; start = 0; }
+      else {
+        if(arr.length === 0) throw self.err("値エラー: 空のリストを初期値なしで reduce できません", line);
+        acc = arr[0]; start = 1;
+      }
+      for(let i = start; i < arr.length; i++) acc = self.invoke(f, [acc, arr[i]], line);
+      return acc;
+    });
+
+    g.define("sort", function(args, line){
+      const arr = args[0];
+      if(!Array.isArray(arr)) throw self.err("型エラー: sort の第1引数はリストである必要があります（" + typeName(arr) + "）", line);
+      const copy = arr.slice();
+      if(args.length >= 2 && args[1] !== null && args[1] !== undefined){
+        const cmp = args[1];
+        copy.sort(function(a, b){
+          const r = self.invoke(cmp, [a, b], line);
+          if(r === true) return 1;
+          if(r === false || r === null) return 0;
+          if(typeof r === "number") return r < 0 ? -1 : (r > 0 ? 1 : 0);
+          throw self.err("型エラー: 比較関数は数値か真偽値を返す必要があります（" + typeName(r) + "）", line);
+        });
+      } else {
+        copy.sort(function(a, b){
+          if(typeof a === "number" && typeof b === "number") return a - b;
+          if(typeof a === "string" && typeof b === "string") return a < b ? -1 : (a > b ? 1 : 0);
+          throw self.err("型エラー: sort できない要素が含まれています（" + typeName(a) + " と " + typeName(b) + "）", line);
+        });
+      }
+      return copy;
+    });
+
+    g.define("join", function(args, line){
+      const arr = args[0];
+      if(!Array.isArray(arr)) throw self.err("型エラー: join の第1引数はリストである必要があります（" + typeName(arr) + "）", line);
+      const sep = (args.length >= 2) ? toDisplay(args[1]) : "";
+      return arr.map(toDisplay).join(sep);
+    });
+  }
+
+  invoke(fn, args, line){
+    if(typeof fn === "function") return fn(args, line);
+    if(fn && fn.__fn) return this.callFunction(fn, args, line);
+    throw this.err("型エラー: 関数が期待される位置に " + typeName(fn) + " がありました", line);
+  }
+
+  makeFunction(node, env){
+    const fn = {__fn:true, name:node.name || null, params:node.params, body:node.body, env:null};
+    const fnEnv = new Env(env);
+    if(node.name) fnEnv.define(node.name, fn);
+    fn.env = fnEnv;
+    return fn;
+  }
+
+  callFunction(fn, args, line){
+    if(this.depth >= this.maxDepth){
+      throw this.err("スタックオーバーフロー: 関数の呼び出しが深すぎます（再帰の上限 " + this.maxDepth + "）", line);
+    }
+    if(args.length < fn.params.length){
+      throw this.err("引数が足りません: 関数 " + (fn.name || "<無名>") + " は " + fn.params.length
+        + " 個の引数を期待していますが " + args.length + " 個しか渡されませんでした", line);
+    }
+    this.depth++;
+    const env = new Env(fn.env);
+    for(let i = 0; i < fn.params.length; i++) env.define(fn.params[i], args[i]);
+    try{
+      for(let i = 0; i < fn.body.body.length; i++) this.evaluate(fn.body.body[i], env);
+      return null;
+    }catch(e){
+      if(e && e.__return) return e.value;
+      if(e && e.__break) throw this.err("'break' をループの外で使うことはできません", e.line);
+      if(e && e.__continue) throw this.err("'continue' をループの外で使うことはできません", e.line);
+      throw e;
+    }finally{
+      this.depth--;
+    }
+  }
+
+  toIndex(v, line){
+    if(typeof v !== "number") throw this.err("型エラー: インデックスは数値である必要があります（" + typeName(v) + "）", line);
+    if(!Number.isInteger(v)) throw this.err("型エラー: インデックスは整数である必要があります（" + formatNumber(v) + "）", line);
+    return v;
+  }
+
+  run(ast){
+    try{
+      this.evaluate(ast, this.global);
+    }catch(e){
+      if(e && e.__return) throw this.err("'return' を関数の外で使うことはできません", e.line);
+      if(e && e.__break) throw this.err("'break' をループの外で使うことはできません", e.line);
+      if(e && e.__continue) throw this.err("'continue' をループの外で使うことはできません", e.line);
+      throw e;
+    }
+  }
+
+  evaluate(node, env){
+    this.steps++;
+    if(this.steps > this.maxSteps){
+      throw this.err("ステップ上限（" + this.maxSteps + "）を超えました。無限ループの可能性があります", node.line);
+    }
+
+    switch(node.type){
+      case "Program":
+      case "Block": {
+        const scope = (node.type === "Block") ? new Env(env) : env;
+        let last = null;
+        for(let i = 0; i < node.body.length; i++) last = this.evaluate(node.body[i], scope);
+        return last;
+      }
+
+      case "Let": {
+        const v = this.evaluate(node.init, env);
+        env.define(node.name, v);
+        return null;
+      }
+
+      case "Assign": {
+        const value = this.evaluate(node.value, env);
+        const target = node.target;
+        if(target.type === "Variable"){
+          if(!env.assign(target.name, value)){
+            throw this.err("未定義の変数 '" + target.name + "' に代入できません（let で宣言してください）", target.line);
+          }
+          return value;
+        }
+        if(target.type === "Index"){
+          const obj = this.evaluate(target.object, env);
+          const idx = this.evaluate(target.index, env);
+          if(!Array.isArray(obj)) throw this.err("型エラー: リスト以外にはインデックス代入できません（" + typeName(obj) + "）", target.line);
+          let i = this.toIndex(idx, target.line);
+          if(i < 0) i += obj.length;
+          if(i < 0 || i >= obj.length) throw this.err("範囲エラー: インデックス " + idx + " は範囲外です（長さ " + obj.length + "）", target.line);
+          obj[i] = value;
+          return value;
+        }
+        throw this.err("代入できない対象です", target.line);
+      }
+
+      case "ExprStmt":
+        return this.evaluate(node.expr, env);
+
+      case "If": {
+        if(truthy(this.evaluate(node.cond, env))) return this.evaluate(node.then, env);
+        if(node.else) return this.evaluate(node.else, env);
+        return null;
+      }
+
+      case "While": {
+        while(truthy(this.evaluate(node.cond, env))){
+          try{ this.evaluate(node.body, env); }
+          catch(e){ if(e && e.__break) break; if(e && e.__continue) continue; throw e; }
+        }
+        return null;
+      }
+
+      case "For": {
+        const iter = this.evaluate(node.iter, env);
+        let items;
+        if(Array.isArray(iter)) items = iter;
+        else if(typeof iter === "string") items = iter.split("");
+        else throw this.err("型エラー: for で反復できるのはリストか文字列です（" + typeName(iter) + "）", node.line);
+        const loopEnv = new Env(env);
+        for(let k = 0; k < items.length; k++){
+          loopEnv.define(node.name, items[k]);
+          try{ this.evaluate(node.body, loopEnv); }
+          catch(e){ if(e && e.__break) break; if(e && e.__continue) continue; throw e; }
+        }
+        return null;
+      }
+
+      case "FnDecl": {
+        const fn = this.makeFunction({name:node.name, params:node.params, body:node.body, line:node.line}, env);
+        env.define(node.name, fn);
+        return null;
+      }
+
+      case "Return":
+        throw {__return:true, value: node.value ? this.evaluate(node.value, env) : null, line:node.line};
+      case "Break":
+        throw {__break:true, line:node.line};
+      case "Continue":
+        throw {__continue:true, line:node.line};
+
+      case "Literal":
+        return node.value;
+
+      case "Variable": {
+        const r = env.lookup(node.name);
+        if(!r.found) throw this.err("未定義の変数 '" + node.name + "' を参照しました", node.line);
+        return r.value;
+      }
+
+      case "List":
+        return node.elements.map((function(self){ return function(el){ return self.evaluate(el, env); }; })(this));
+
+      case "Unary": {
+        const v = this.evaluate(node.operand, env);
+        if(node.op === "not") return !truthy(v);
+        if(typeof v !== "number") throw this.err("型エラー: 単項演算子 '" + node.op + "' は数値にだけ使えます（" + typeName(v) + "）", node.line);
+        return node.op === "-" ? -v : v;
+      }
+
+      case "Binary": {
+        const op = node.op;
+        if(op === "and"){
+          const l = this.evaluate(node.left, env);
+          return truthy(l) ? this.evaluate(node.right, env) : l;
+        }
+        if(op === "or"){
+          const l = this.evaluate(node.left, env);
+          return truthy(l) ? l : this.evaluate(node.right, env);
+        }
+        const a = this.evaluate(node.left, env);
+        const b = this.evaluate(node.right, env);
+        return this.applyBinary(op, a, b, node.line);
+      }
+
+      case "Call": {
+        const callee = this.evaluate(node.callee, env);
+        const args = node.args.map((function(self){ return function(a){ return self.evaluate(a, env); }; })(this));
+        return this.invoke(callee, args, node.line);
+      }
+
+      case "Index": {
+        const obj = this.evaluate(node.object, env);
+        const idx = this.evaluate(node.index, env);
+        if(Array.isArray(obj)){
+          let i = this.toIndex(idx, node.line);
+          if(i < 0) i += obj.length;
+          if(i < 0 || i >= obj.length) throw this.err("範囲エラー: インデックス " + idx + " は範囲外です（長さ " + obj.length + "）", node.line);
+          return obj[i];
+        }
+        if(typeof obj === "string"){
+          let i = this.toIndex(idx, node.line);
+          if(i < 0) i += obj.length;
+          if(i < 0 || i >= obj.length) throw this.err("範囲エラー: インデックス " + idx + " は範囲外です（長さ " + obj.length + "）", node.line);
+          return obj[i];
+        }
+        throw this.err("型エラー: " + typeName(obj) + " にインデックス参照はできません", node.line);
+      }
+
+      case "Function":
+        return this.makeFunction(node, env);
+    }
+
+    throw this.err("内部エラー: 未知のノード型 " + node.type, node.line);
+  }
+
+  applyBinary(op, a, b, line){
+    if(op === "+"){
+      if(typeof a === "number" && typeof b === "number") return a + b;
+      if(typeof a === "string" || typeof b === "string") return toDisplay(a) + toDisplay(b);
+      if(Array.isArray(a) && Array.isArray(b)) return a.concat(b);
+      throw this.err("型エラー: 演算子 '+' は " + typeName(a) + " と " + typeName(b) + " に適用できません", line);
+    }
+    if(op === "==" || op === "!="){
+      const eq = isEqual(a, b);
+      return op === "==" ? eq : !eq;
+    }
+    if(op === "<" || op === "<=" || op === ">" || op === ">="){
+      const bothNum = typeof a === "number" && typeof b === "number";
+      const bothStr = typeof a === "string" && typeof b === "string";
+      if(!bothNum && !bothStr){
+        throw this.err("型エラー: 比較演算子 '" + op + "' は数値同士か文字列同士にだけ使えます（" + typeName(a) + " と " + typeName(b) + "）", line);
+      }
+      switch(op){
+        case "<": return a < b;
+        case "<=": return a <= b;
+        case ">": return a > b;
+        case ">=": return a >= b;
+      }
+    }
+    // 算術
+    if(typeof a !== "number" || typeof b !== "number"){
+      throw this.err("型エラー: 演算子 '" + op + "' は数値にだけ使えます（" + typeName(a) + " と " + typeName(b) + "）", line);
+    }
+    switch(op){
+      case "-": return a - b;
+      case "*": return a * b;
+      case "/":
+        if(b === 0) throw this.err("ゼロ除算エラー: 0 で割ることはできません", line);
+        return a / b;
+      case "%":
+        if(b === 0) throw this.err("ゼロ除算エラー: 0 で剰余を求めることはできません", line);
+        return a % b;
+      case "**": return Math.pow(a, b);
+    }
+    throw this.err("内部エラー: 未知の演算子 '" + op + "'", line);
+  }
+}
+
+/* ============================================================
+ * 7. run エントリポイント
+ * ============================================================ */
+function run(source){
+  const output = [];
+  try{
+    const tokens = tokenize(source);
+    const ast = new Parser(tokens).parseProgram();
+    const interp = new Interpreter(output);
+    interp.run(ast);
+    return {output: output.join("\n"), error: null, errorLine: null};
+  }catch(e){
+    const outStr = output.join("\n");
+    if(e instanceof MiniError){
+      const stage = e.stage === "syntax" ? "構文エラー" : "実行エラー";
+      let loc = "";
+      if(e.line !== null && e.line !== undefined){
+        loc = " [行 " + e.line + (e.col !== null && e.col !== undefined ? ", 列 " + e.col : "") + "]";
+      }
+      return {output: outStr, error: stage + loc + ": " + e.message, errorLine: (e.line === undefined ? null : e.line)};
+    }
+    if(e instanceof RangeError){
+      return {output: outStr, error: "実行エラー: スタックオーバーフロー（再帰が深すぎます）", errorLine: null};
+    }
+    return {output: outStr, error: "内部エラー: " + (e && e.message ? e.message : String(e)), errorLine: null};
+  }
+}
+
+/* ============================================================
+ * 8. サンプルプログラム
+ * ============================================================ */
+const SAMPLES = {
+  welcome:
+`# Mini 言語へようこそ！
+# 「実行」ボタンでこのコードが動きます。
+
+fn greet(name) {
+  return "こんにちは、" + name + "さん！"
+}
+print(greet("世界"))
+
+# 再帰：フィボナッチ
+fn fib(n) {
+  if n < 2 { return n }
+  return fib(n - 1) + fib(n - 2)
+}
+print("fib(20) = " + fib(20))
+
+# 高階関数とリスト
+let nums = [1, 2, 3, 4, 5]
+print("2乗   : " + str(map(nums, fn(x) { return x * x })))
+print("偶数   : " + str(filter(nums, fn(x) { return x % 2 == 0 })))
+print("合計   : " + str(reduce(nums, fn(a, b) { return a + b }, 0)))`,
+
+  fibonacci:
+`# フィボナッチ数列
+fn fib(n) {
+  if n < 2 { return n }
+  return fib(n - 1) + fib(n - 2)
+}
+
+for i in range(12) {
+  print("fib(" + i + ") = " + fib(i))
+}`,
+
+  prime:
+`# 素数を列挙する
+fn is_prime(n) {
+  if n < 2 { return false }
+  let i = 2
+  while i * i <= n {
+    if n % i == 0 { return false }
+    i = i + 1
+  }
+  return true
+}
+
+let primes = []
+for n in range(2, 60) {
+  if is_prime(n) { push(primes, n) }
+}
+print("素数 (" + len(primes) + " 個):")
+print(join(primes, ", "))`,
+
+  closure:
+`# クロージャ：状態を持ち運ぶ関数
+fn make_adder(n) {
+  fn add(x) { return x + n }
+  return add
+}
+let add5 = make_adder(5)
+print("add5(10)  = " + add5(10))
+print("add5(100) = " + add5(100))
+
+fn make_counter() {
+  let count = 0
+  fn next() { count = count + 1; return count }
+  return next
+}
+let c = make_counter()
+print("counter: " + c() + ", " + c() + ", " + c())`,
+
+  sort:
+`# バブルソートを自前で実装
+fn bubble_sort(a) {
+  let n = len(a)
+  let i = 0
+  while i < n {
+    let j = 0
+    while j < n - i - 1 {
+      if a[j] > a[j + 1] {
+        let t = a[j]
+        a[j] = a[j + 1]
+        a[j + 1] = t
+      }
+      j = j + 1
+    }
+    i = i + 1
+  }
+  return a
+}
+
+let data = [5, 3, 8, 1, 9, 2, 7]
+print("元のリスト: " + str(data))
+print("ソート後  : " + str(bubble_sort(data)))
+print("組み込み sort: " + str(sort([5, 3, 8, 1, 9, 2, 7])))`,
+
+  fizzbuzz:
+`# FizzBuzz
+for i in range(1, 21) {
+  if i % 15 == 0 {
+    print("FizzBuzz")
+  } else if i % 3 == 0 {
+    print("Fizz")
+  } else if i % 5 == 0 {
+    print("Buzz")
+  } else {
+    print(i)
+  }
+}`
+};
+
+/* ============================================================
+ * 9. テストスイート
+ * ============================================================ */
+const TESTS = [
+  {name:"数値リテラル", src:'print(42)', out:"42"},
+  {name:"浮動小数リテラル", src:'print(3.5)', out:"3.5"},
+  {name:"文字列リテラル", src:'print("hello")', out:"hello"},
+  {name:"文字列エスケープ", src:'print("a\\nb")', out:"a\nb"},
+  {name:"真偽値と nil", src:'print(true)\nprint(false)\nprint(nil)', out:"true\nfalse\nnil"},
+  {name:"四則演算の優先順位", src:'print(2 + 3 * 4)', out:"14"},
+  {name:"括弧による優先順位", src:'print((2 + 3) * 4)', out:"20"},
+  {name:"剰余演算", src:'print(17 % 5)', out:"2"},
+  {name:"べき乗", src:'print(2 ** 10)', out:"1024"},
+  {name:"べき乗は右結合", src:'print(2 ** 3 ** 2)', out:"512"},
+  {name:"単項マイナスとべき乗", src:'print(-2 ** 2)', out:"-4"},
+  {name:"比較演算", src:'print(3 < 5)\nprint(5 <= 5)\nprint(3 != 4)', out:"true\ntrue\ntrue"},
+  {name:"論理 and / or", src:'print(true and false)\nprint(true or false)', out:"false\ntrue"},
+  {name:"not 演算子", src:'print(not false)', out:"true"},
+  {name:"not と比較の優先順位", src:'print(not 1 == 2)', out:"true"},
+  {name:"and は or より強い", src:'print(true or false and false)', out:"true"},
+  {name:"論理の短絡評価", src:'fn side() { print("called"); return true }\nprint(false and side())\nprint(true or side())', out:"false\ntrue"},
+  {name:"let と再代入", src:'let x = 10\nx = x + 5\nprint(x)', out:"15"},
+  {name:"文字列の連結", src:'print("a" + "b")\nprint("n=" + 5)', out:"ab\nn=5"},
+  {name:"リストの表示", src:'print([1, 2, 3])', out:"[1, 2, 3]"},
+  {name:"ネストしたリスト", src:'print([[1, 2], [3, 4]])', out:"[[1, 2], [3, 4]]"},
+  {name:"インデックス参照(負数含む)", src:'let a = [10, 20, 30]\nprint(a[1])\nprint(a[-1])', out:"20\n30"},
+  {name:"インデックス代入", src:'let a = [1, 2, 3]\na[1] = 99\nprint(a)', out:"[1, 99, 3]"},
+  {name:"len", src:'print(len("hello"))\nprint(len([1, 2, 3]))', out:"5\n3"},
+  {name:"push", src:'let a = [1]\npush(a, 2)\npush(a, 3)\nprint(a)', out:"[1, 2, 3]"},
+  {name:"range(1引数)", src:'print(range(5))', out:"[0, 1, 2, 3, 4]"},
+  {name:"range(開始, 終了)", src:'print(range(2, 5))', out:"[2, 3, 4]"},
+  {name:"range(開始, 終了, 刻み)", src:'print(range(0, 10, 3))', out:"[0, 3, 6, 9]"},
+  {name:"if / else", src:'fn f(n) { if n % 2 == 0 { return "even" } else { return "odd" } }\nprint(f(4))\nprint(f(7))', out:"even\nodd"},
+  {name:"else if", src:'fn f(n) { if n < 0 { return "neg" } else if n == 0 { return "zero" } else { return "pos" } }\nprint(f(-1))\nprint(f(0))\nprint(f(2))', out:"neg\nzero\npos"},
+  {name:"while ループ", src:'let i = 0\nlet s = 0\nwhile i < 5 { s = s + i; i = i + 1 }\nprint(s)', out:"10"},
+  {name:"for in ループ", src:'let s = 0\nfor x in [1, 2, 3, 4] { s = s + x }\nprint(s)', out:"10"},
+  {name:"break", src:'for x in range(10) { if x == 3 { break }\nprint(x) }', out:"0\n1\n2"},
+  {name:"continue", src:'for x in range(5) { if x % 2 == 0 { continue }\nprint(x) }', out:"1\n3"},
+  {name:"関数定義と return", src:'fn add(a, b) { return a + b }\nprint(add(2, 3))', out:"5"},
+  {name:"再帰（階乗）", src:'fn fact(n) { if n <= 1 { return 1 }\nreturn n * fact(n - 1) }\nprint(fact(5))', out:"120"},
+  {name:"再帰（フィボナッチ）", src:'fn fib(n) { if n < 2 { return n }\nreturn fib(n - 1) + fib(n - 2) }\nprint(fib(10))', out:"55"},
+  {name:"クロージャ", src:'fn counter() { let n = 0\nfn inc() { n = n + 1; return n }\nreturn inc }\nlet c = counter()\nprint(c())\nprint(c())\nprint(c())', out:"1\n2\n3"},
+  {name:"クロージャは独立", src:'fn make() { let n = 0\nreturn fn() { n = n + 1; return n } }\nlet a = make()\nlet b = make()\nprint(a())\nprint(a())\nprint(b())', out:"1\n2\n1"},
+  {name:"関数を引数に渡す", src:'fn apply(f, x) { return f(x) }\nprint(apply(fn(y) { return y * 2 }, 21))', out:"42"},
+  {name:"関数を戻り値にする", src:'fn adder(n) { return fn(x) { return x + n } }\nlet add10 = adder(10)\nprint(add10(5))', out:"15"},
+  {name:"map", src:'print(map([1, 2, 3], fn(x) { return x * x }))', out:"[1, 4, 9]"},
+  {name:"filter", src:'print(filter([1, 2, 3, 4, 5, 6], fn(x) { return x % 2 == 0 }))', out:"[2, 4, 6]"},
+  {name:"reduce", src:'print(reduce([1, 2, 3, 4], fn(a, b) { return a + b }, 0))', out:"10"},
+  {name:"sort", src:'print(sort([3, 1, 4, 1, 5, 9, 2, 6]))', out:"[1, 1, 2, 3, 4, 5, 6, 9]"},
+  {name:"join", src:'print(join(["a", "b", "c"], "-"))', out:"a-b-c"},
+  {name:"str と num", src:'print(str(12) + "!")\nprint(num("3") + 1)', out:"12!\n4"},
+  {name:"組み込み関数を値として渡す", src:'print(map([1, 2, 3], str))', out:'["1", "2", "3"]'},
+  {name:"コメント", src:'# コメント行\nprint(1) # 行末コメント', out:"1"},
+  {name:"返り値のない関数は nil", src:'fn g() { }\nprint(g())', out:"nil"},
+  {name:"リストの等価比較", src:'print([1, 2] == [1, 2])\nprint([1, 2] == [1, 3])', out:"true\nfalse"},
+  {name:"文字列のインデックスと長さ", src:'let s = "abc"\nprint(s[0])\nprint(len(s))', out:"a\n3"},
+  {name:"文字列を for で反復", src:'let s = ""\nfor ch in "abc" { s = s + ch }\nprint(s)', out:"abc"},
+  {name:"空リストと push", src:'let a = []\npush(a, 1)\nprint(len(a))', out:"1"},
+  {name:"多段の代入と参照", src:'let a = 1\nlet b = a + 1\nlet c = b + 1\nprint(a + b + c)', out:"6"},
+  {name:"未定義変数の参照エラー", src:'print(undefined_var)', err:"未定義の変数"},
+  {name:"未定義変数への代入エラー", src:'x = 5', err:"未定義の変数"},
+  {name:"構文エラー", src:'print(1 +)', err:"構文エラー"},
+  {name:"括弧の対応エラー", src:'print((1 + 2)', err:"構文エラー"},
+  {name:"ゼロ除算エラー", src:'print(1 / 0)', err:"ゼロ除算"},
+  {name:"ゼロ剰余エラー", src:'print(1 % 0)', err:"ゼロ除算"},
+  {name:"型エラー（数値 + リスト）", src:'print(1 + [1, 2])', err:"型エラー"},
+  {name:"インデックス範囲外エラー", src:'let a = [1]\nprint(a[5])', err:"範囲エラー"},
+  {name:"引数不足エラー", src:'fn f(a, b) { return a }\nf(1)', err:"引数が足りません"},
+  {name:"無限再帰の保護", src:'fn f(n) { return f(n + 1) }\nf(0)', err:"スタックオーバーフロー"},
+  {name:"無限ループの保護", src:'let i = 0\nwhile true { i = i + 1 }', err:"ステップ上限"},
+  {name:"break 後の正常終了", src:'for x in [1, 2, 3] { if x == 2 { break } }\nprint("ok")', out:"ok"}
+];
+
+function runTests(){
+  const list = [];
+  let passed = 0;
+  for(let i = 0; i < TESTS.length; i++){
+    const t = TESTS[i];
+    const r = run(t.src);
+    let ok = false, got = "";
+    if(t.err){
+      if(r.error && r.error.indexOf(t.err) >= 0) ok = true;
+      else got = r.error ? ("エラー: " + r.error) : ("出力: " + r.output);
+    } else {
+      if(r.error){ got = "エラー: " + r.error; }
+      else {
+        const o = r.output.replace(/\s+$/, "");
+        const e = (t.out || "").replace(/\s+$/, "");
+        if(o === e) ok = true;
+        else got = "期待: " + JSON.stringify(e) + " / 実際: " + JSON.stringify(o);
+      }
+    }
+    if(ok) passed++;
+    list.push({name:t.name, ok:ok, got:got});
+  }
+  const total = TESTS.length;
+  return {passed:passed, failed:total - passed, total:total, list:list};
+}
+
+/* ============================================================
+ * 10. UI
+ * ============================================================ */
+const elCode = document.getElementById("code");
+const elGutter = document.getElementById("gutter");
+const elHighlight = document.getElementById("lineHighlight");
+const elOutput = document.getElementById("output");
+const elError = document.getElementById("error");
+const elTime = document.getElementById("time");
+const elSamples = document.getElementById("samples");
+const elRun = document.getElementById("run");
+const elRunTests = document.getElementById("runTests");
+const elClear = document.getElementById("clear");
+const elTestSummary = document.getElementById("testSummary");
+const elTestList = document.getElementById("testList");
+const LINE_H = 24;
+
+let errorLine = null;
+
+function updateGutter(){
+  const count = elCode.value.split("\n").length;
+  let html = "";
+  for(let i = 1; i <= count; i++){
+    html += '<div class="ln' + (i === errorLine ? " err" : "") + '">' + i + "</div>";
+  }
+  elGutter.innerHTML = html;
+  syncScroll();
+}
+function syncScroll(){
+  elGutter.scrollTop = elCode.scrollTop;
+  if(errorLine){
+    const top = 12 + (errorLine - 1) * LINE_H - elCode.scrollTop;
+    elHighlight.style.top = top + "px";
+  }
+}
+function setErrorLine(line){
+  errorLine = (typeof line === "number" && line > 0) ? line : null;
+  if(errorLine){ elHighlight.style.display = "block"; }
+  else { elHighlight.style.display = "none"; }
+  updateGutter();
+}
+function showError(msg, line){
+  elError.textContent = msg;
+  elError.classList.add("show");
+  setErrorLine(line);
+  if(errorLine){
+    const lh = LINE_H;
+    const target = 12 + (errorLine - 1) * lh - elCode.clientHeight / 2 + lh;
+    elCode.scrollTop = Math.max(0, target);
+    syncScroll();
+  }
+}
+function hideError(){
+  elError.classList.remove("show");
+  elError.textContent = "";
+  setErrorLine(null);
+}
+
+function doRun(){
+  hideError();
+  const t0 = performance.now();
+  const res = run(elCode.value);
+  const t1 = performance.now();
+  elOutput.textContent = res.output;
+  elTime.textContent = "実行時間: " + (t1 - t0).toFixed(2) + " ms";
+  if(res.error) showError(res.error, res.errorLine);
+}
+
+function renderTests(result){
+  elTestSummary.innerHTML = "";
+  const okPill = document.createElement("span");
+  okPill.className = "pill ok";
+  okPill.textContent = "成功 " + result.passed + " / " + result.total;
+  const ngPill = document.createElement("span");
+  ngPill.className = "pill " + (result.failed > 0 ? "ng" : "ok");
+  ngPill.textContent = "失敗 " + result.failed;
+  elTestSummary.appendChild(okPill);
+  elTestSummary.appendChild(ngPill);
+
+  elTestList.innerHTML = "";
+  for(let i = 0; i < result.list.length; i++){
+    const t = result.list[i];
+    const d = document.createElement("div");
+    d.className = "test-item " + (t.ok ? "ok" : "ng");
+    const m = document.createElement("span");
+    m.className = "mark";
+    m.textContent = t.ok ? "PASS" : "FAIL";
+    const body = document.createElement("span");
+    if(t.ok){
+      body.textContent = t.name;
+    } else {
+      body.textContent = t.name;
+      const det = document.createElement("span");
+      det.className = "detail";
+      det.textContent = t.got;
+      body.appendChild(det);
+    }
+    d.appendChild(m);
+    d.appendChild(body);
+    elTestList.appendChild(d);
+  }
+}
+
+function doRunTests(){
+  const result = runTests();
+  renderTests(result);
+}
+
+// サンプル選択
+Object.keys(SAMPLES).forEach(function(key){
+  const opt = document.createElement("option");
+  opt.value = key;
+  const labels = {
+    welcome:"ようこそ（機能ツアー）", fibonacci:"フィボナッチ", prime:"素数",
+    closure:"クロージャ", sort:"ソート", fizzbuzz:"FizzBuzz"
+  };
+  opt.textContent = labels[key] || key;
+  elSamples.appendChild(opt);
+});
+elSamples.value = "welcome";
+elCode.value = SAMPLES.welcome;
+
+elSamples.addEventListener("change", function(){
+  elCode.value = SAMPLES[elSamples.value] || "";
+  hideError();
+  updateGutter();
+});
+
+elRun.addEventListener("click", doRun);
+elRunTests.addEventListener("click", doRunTests);
+elClear.addEventListener("click", function(){
+  elCode.value = "";
+  hideError();
+  elOutput.textContent = "";
+  elTime.textContent = "";
+  updateGutter();
+  elCode.focus();
+});
+
+// Tab によるインデント / Shift+Tab で戻す
+elCode.addEventListener("keydown", function(e){
+  if(e.key === "Tab"){
+    e.preventDefault();
+    const start = elCode.selectionStart, end = elCode.selectionEnd;
+    if(!e.shiftKey){
+      elCode.setRangeText("  ", start, end, "end");
+    } else {
+      const valBefore = elCode.value;
+      const lineStart = valBefore.lastIndexOf("\n", start - 1) + 1;
+      const seg = valBefore.slice(lineStart, start);
+      const m = seg.match(/^ {1,2}/);
+      if(m) elCode.setRangeText("", lineStart, lineStart + m[0].length, "end");
+    }
+    hideError();
+    updateGutter();
+    return;
+  }
+  if((e.ctrlKey || e.metaKey) && e.key === "Enter"){
+    e.preventDefault();
+    doRun();
+  }
+});
+elCode.addEventListener("input", function(){ hideError(); updateGutter(); });
+elCode.addEventListener("scroll", syncScroll);
+
+// 初期描画と初回実行
+updateGutter();
+doRun();
+
+/* ============================================================
+ * 11. デバッグ用 API
+ * ============================================================ */
+window.__mini = {
+  run: function(src){
+    const r = run(src);
+    return {output:r.output, error:r.error};
+  },
+  runTests: function(){
+    const r = runTests();
+    renderTests(r);
+    return {passed:r.passed, failed:r.failed, total:r.total};
+  }
+};
+</script>
+</body>
+</html>
