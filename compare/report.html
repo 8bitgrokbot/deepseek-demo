@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>DeepSeek V4.1 Flash Free と GLM-5.3-Flash Free の比較レポート（iPhone向け）</title>
+<style>
+:root{--bg:#f6f7f9;--fg:#1c2129;--mut:#59616d;--card:#fff;--bd:#d6dae0;--a:#0f766e;--abg:#e3f4f2;--b:#6d28d9;--bbg:#eee8fb;--link:#1d4ed8}
+@media(prefers-color-scheme:dark){:root{--bg:#10141a;--fg:#e6e9ee;--mut:#9aa3af;--card:#1a2029;--bd:#323a46;--a:#5eead4;--abg:#12302d;--b:#c4b5fd;--bbg:#272040;--link:#8ab4ff}}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.7 -apple-system,BlinkMacSystemFont,"Hiragino Sans","Hiragino Kaku Gothic ProN",sans-serif;padding:16px max(16px,env(safe-area-inset-right)) 40px max(16px,env(safe-area-inset-left));overflow-wrap:anywhere}
+main{max-width:640px;margin:0 auto}
+h1{font-size:1.4rem;line-height:1.4;margin:8px 0 4px}
+h2{font-size:1.2rem;margin:32px 0 10px;padding-bottom:6px;border-bottom:2px solid var(--bd)}
+h3{font-size:1.05rem;margin:0 0 8px}
+p,li{margin:6px 0}
+ul,ol{padding-left:1.4em;margin:6px 0}
+a{color:var(--link)}
+code{font-size:.9rem;background:var(--card);border:1px solid var(--bd);border-radius:4px;padding:1px 5px}
+.sub{color:var(--mut)}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px;margin:12px 0}
+.sum li{margin:8px 0}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+.m{border-radius:8px;padding:8px 10px;min-width:0}
+.m.d{background:var(--abg);border-left:5px solid var(--a)}
+.m.g{background:var(--bbg);border-left:5px solid var(--b)}
+.m b.n{display:block;font-size:1rem}
+.m.d b.n{color:var(--a)}.m.g b.n{color:var(--b)}
+.m div{margin:2px 0}
+.big{font-size:1.15rem;font-weight:700}
+.note{color:var(--mut);margin-top:8px}
+.links a{display:inline-block;min-height:44px;line-height:44px;padding:0 4px}
+.btn{display:block;text-align:center;padding:12px;margin:8px 0;border:1px solid var(--bd);border-radius:10px;background:var(--card);text-decoration:none;min-height:48px}
+.shots{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:8px 0}
+.shots figure{margin:0}
+.shots img{width:100%;height:auto;border-radius:8px;border:1px solid var(--bd);display:block}
+.shots figcaption{font-size:.95rem;color:var(--mut);margin-top:4px}
+.shots .lab{font-weight:700}
+.shots .d .lab{color:var(--a)}.shots .g .lab{color:var(--b)}
+details{background:var(--card);border:1px solid var(--bd);border-radius:10px;margin:8px 0;padding:0 14px}
+summary{cursor:pointer;min-height:48px;display:flex;align-items:center;font-weight:600}
+details[open] summary{border-bottom:1px solid var(--bd);margin-bottom:8px}
+details p{margin:8px 0 12px}
+.tag{display:inline-block;font-size:.95rem;padding:0 8px;border-radius:999px;border:1px solid var(--bd);color:var(--mut);margin-right:4px}
+</style></head><body><main>
+
+<h1>DeepSeek V4.1 Flash Free と GLM-5.3-Flash Free の比較レポート</h1>
+<p class="sub">OpenCode v2.0.29 の無料モデル2つに、同じ7課題を解かせた記録です。実行日: 2026-10-16。モデルは名前のアルファベット順（DeepSeek、GLM）で並べ、色は中立の2色です。</p>
+<a class="btn" href="./">詳しい比較ページ（PC向け・全文・採点項目）</a>
+
+<h2>1. 結論</h2>
+<ul class="sum">
+<li>7課題とも、自動採点はほぼ満点でした。品質の差はほとんど出ていません。</li>
+<li>差が出たのは、所要時間と文章の細部です。所要時間は、7課題すべてでDeepSeekのほうが短くなりました。</li>
+<li>1課題につき1回の試行で、無料枠の混雑にも左右されます。統計的には弱く、速度差をモデル性能の差とは断定できません。</li>
+<li>課題が易しく、採点が満点に張り付いています。難しい課題での差は測っていません。</li>
+<li>課題3のベースファイルは、以前DeepSeekが生成したものです。DeepSeek側に有利だった可能性があります。</li>
+</ul>
+
+<h2>2. 条件</h2>
+<div class="card"><ul>
+<li>プロンプトは、2モデルで一字一句同じです。</li>
+<li>実行ごとに新規セッション（新規の設定フォルダと作業フォルダ）です。</li>
+<li>設定は同一です。<code>-m</code> でモデルだけを変えました。タイトル生成の無効化以外は既定で、追加指示もありません。</li>
+<li>原則は一発出しで、生成物は無修正です。</li>
+<li>実行は課題ごとに交互です。奇数課題はDeepSeekが先、偶数課題はGLMが先でした。</li>
+<li>再実行は、インフラ起因（Model unavailable、接続切断、サーバーエラー）で何も得られなかった場合だけです。出来の悪さによる再実行はしていません。</li>
+<li>1回のタイムアウトは1200秒です。</li>
+<li>採点は自動チェックです。LLMによる判定はしていません。</li>
+</ul></div>
+
+<h2>3. 7課題の結果</h2>
+<p class="sub">採点は「合格 / 項目数」です。所要秒は最終試行の値です。</p>
+
+<div class="card"><h3>課題1　ブロック崩しの新規作成</h3>
+<div class="pair">
+<div class="m d"><b class="n">DeepSeek</b><div class="big">26/26</div><div>126.4秒</div><div>再試行 0回</div><div>ツール呼出 3</div></div>
+<div class="m g"><b class="n">GLM</b><div class="big">26/26 *</div><div>1851.0秒</div><div>再試行 3回</div><div>ツール呼出 9</div></div></div>
+<p class="note">* 自動判定は25/26でした。HUDがcanvas描画でDOMテキストに無く、誤判定だったため、スクリーンショットで目視確認して合格に訂正しています。<br>GLMは4回試行しました。1・3回目はModel unavailable、2回目は接続切断などでタイムアウトです。4回目も接続切断・サーバーエラーが出て、1200秒のタイムアウトで強制終了されました。ただし終了時点でindex.html（19.5KB）ができており、そのまま採点・公開しています。4回の合計は約3080秒（約51分）です。</p></div>
+
+<div class="card"><h3>課題2　バグ修正（Python）</h3>
+<div class="pair">
+<div class="m d"><b class="n">DeepSeek</b><div class="big">6/6</div><div>13.7秒</div><div>再試行 0回</div><div>ツール呼出 6</div></div>
+<div class="m g"><b class="n">GLM</b><div class="big">6/6</div><div>77.6秒</div><div>再試行 0回</div><div>ツール呼出 6</div></div></div></div>
+
+<div class="card"><h3>課題3　既存コードの改修（Undo追加）</h3>
+<div class="pair">
+<div class="m d"><b class="n">DeepSeek</b><div class="big">17/17</div><div>209.4秒</div><div>再試行 0回</div><div>ツール呼出 33</div></div>
+<div class="m g"><b class="n">GLM</b><div class="big">17/17</div><div>673.0秒</div><div>再試行 0回</div><div>ツール呼出 18</div></div></div>
+<p class="note">ベースファイルは以前DeepSeekが生成したものです。DeepSeek側に有利だった可能性があります。</p></div>
+
+<div class="card"><h3>課題4　論理・算数（8問）</h3>
+<div class="pair">
+<div class="m d"><b class="n">DeepSeek</b><div class="big">9/9</div><div>5.3秒</div><div>再試行 1回</div><div class="sub">8問全問正解</div></div>
+<div class="m g"><b class="n">GLM</b><div class="big">9/9</div><div>24.1秒</div><div>再試行 0回</div><div class="sub">8問全問正解</div></div></div>
+<p class="note">DeepSeekの再試行1回は、Model unavailable（約1.4秒で失敗）によるものです。</p></div>
+
+<div class="card"><h3>課題5　日本語の議事メモ整理</h3>
+<div class="pair">
+<div class="m d"><b class="n">DeepSeek</b><div class="big">8/8</div><div>15.4秒</div><div>再試行 0回</div><div>重要事実 5/8</div></div>
+<div class="m g"><b class="n">GLM</b><div class="big">8/8</div><div>132.6秒</div><div>再試行 0回</div><div>重要事実 7/8</div></div></div>
+<p class="note">「重要事実」は、メモの8項目のうち文書に入った数です。DeepSeekは「23日」「12月7日」「350円」を落としました。GLMは「350円」を落としました。</p></div>
+
+<div class="card"><h3>課題6　12条件の物語</h3>
+<div class="pair">
+<div class="m d"><b class="n">DeepSeek</b><div class="big">14/14</div><div>43.8秒</div><div>再試行 0回</div><div>ツール呼出 1</div></div>
+<div class="m g"><b class="n">GLM</b><div class="big">14/14</div><div>107.4秒</div><div>再試行 1回</div><div>ツール呼出 3</div></div></div>
+<p class="note">GLMの再試行1回は、Model unavailableによるものです。</p></div>
+
+<div class="card"><h3>課題7　CSV集計（ツール使用）</h3>
+<div class="pair">
+<div class="m d"><b class="n">DeepSeek</b><div class="big">8/8</div><div>20.9秒</div><div>再試行 0回</div><div>ツール呼出 8</div></div>
+<div class="m g"><b class="n">GLM</b><div class="big">8/8</div><div>43.0秒</div><div>再試行 0回</div><div>ツール呼出 4</div></div></div>
+<p class="note">report.mdは両モデルとも正確でした。</p></div>
+
+<h2>4. モデルごとの強みと弱み</h2>
+<p class="sub">いずれも今回の1回ずつの結果に基づきます。</p>
+<div class="card"><h3 style="color:var(--a)">DeepSeek V4.1 Flash Free</h3>
+<p><span class="tag">強み</span></p><ul>
+<li>全7課題で所要時間が短い（例: 課題2は13.7秒、課題3は209秒）。</li>
+<li>課題5の要約は簡潔で、指定の形式どおり。</li>
+<li>課題7のチャット上の要約は、数字がレポートと一致。</li></ul>
+<p><span class="tag">弱み</span></p><ul>
+<li>課題5で、メモの重要事実の網羅が5/8だった。</li>
+<li>課題4でModel unavailableが1回出た。</li>
+<li>過去の別実験で、接続切断（ECONNRESET）が出たことがある。</li></ul></div>
+<div class="card"><h3 style="color:var(--b)">GLM-5.3-Flash Free</h3>
+<p><span class="tag">強み</span></p><ul>
+<li>課題5の要約が網羅的で、重要事実は7/8。次回定例日や防災訓練の詳細も含めた。</li>
+<li>課題1・3の成果物は、自動採点で満点。</li></ul>
+<p><span class="tag">弱み</span></p><ul>
+<li>所要時間が長い。課題1は接続切断とサーバーエラーが続き、約51分かかった。</li>
+<li>課題5に「会費値上げ案は…決まった」という、やや不正確な言い回しがあった。</li>
+<li>課題7のチャット上の要約に、数字の誤りが1つあった（キャンドル「58万9,400円」。正しくは578,400円）。崩れた文もあった。ファイルのreport.mdは正確。</li>
+<li>課題6でModel unavailableが1回、課題1で2回出た。</li></ul></div>
+<p class="sub">補足: 接続切断は、無料枠のサーバー側の問題と推測しています（推測）。両モデルで起こりえます。</p>
+
+<h2>5. 作品へのリンク</h2>
+<p class="sub">画像をタップすると、大きい画像が開きます。</p>
+
+<h3>課題1　ブロック崩し</h3>
+<div class="shots">
+<figure class="d"><a href="report_img/t1_deepseek_play2.jpg"><img src="report_img/t1_deepseek_play2.jpg" alt="DeepSeek製ブロック崩しのプレイ画面" loading="lazy" width="390" height="844"></a><figcaption><span class="lab">DeepSeek</span>　プレイ中</figcaption></figure>
+<figure class="g"><a href="report_img/t1_glm_play2.jpg"><img src="report_img/t1_glm_play2.jpg" alt="GLM製ブロック崩しのプレイ画面" loading="lazy" width="390" height="844"></a><figcaption><span class="lab">GLM</span>　プレイ中</figcaption></figure>
+<figure class="d"><a href="report_img/t1_deepseek_title.jpg"><img src="report_img/t1_deepseek_title.jpg" alt="DeepSeek製ブロック崩しのタイトル画面" loading="lazy" width="390" height="844"></a><figcaption><span class="lab">DeepSeek</span>　タイトル</figcaption></figure>
+<figure class="g"><a href="report_img/t1_glm_title.jpg"><img src="report_img/t1_glm_title.jpg" alt="GLM製ブロック崩しのタイトル画面" loading="lazy" width="390" height="844"></a><figcaption><span class="lab">GLM</span>　タイトル</figcaption></figure>
+</div>
+<a class="btn" href="deepseek-v4.1-flash-free/t1_game/index.html">DeepSeek製の作品を開く（課題1）</a>
+<a class="btn" href="glm-5.3-flash-free/t1_game/index.html">GLM製の作品を開く（課題1）</a>
+
+<h3>課題3　Undo追加</h3>
+<div class="shots">
+<figure class="d"><a href="report_img/t3_deepseek_placed.jpg"><img src="report_img/t3_deepseek_placed.jpg" alt="DeepSeek版Undo、ピース設置後" loading="lazy" width="390" height="844"></a><figcaption><span class="lab">DeepSeek</span>　設置後</figcaption></figure>
+<figure class="g"><a href="report_img/t3_glm_placed.jpg"><img src="report_img/t3_glm_placed.jpg" alt="GLM版Undo、ピース設置後" loading="lazy" width="390" height="844"></a><figcaption><span class="lab">GLM</span>　設置後</figcaption></figure>
+<figure class="d"><a href="report_img/t3_deepseek_undone.jpg"><img src="report_img/t3_deepseek_undone.jpg" alt="DeepSeek版Undo、取り消し後" loading="lazy" width="390" height="844"></a><figcaption><span class="lab">DeepSeek</span>　取り消し後</figcaption></figure>
+<figure class="g"><a href="report_img/t3_glm_undone.jpg"><img src="report_img/t3_glm_undone.jpg" alt="GLM版Undo、取り消し後" loading="lazy" width="390" height="844"></a><figcaption><span class="lab">GLM</span>　取り消し後</figcaption></figure>
+</div>
+<p class="note">Undoボタンの位置は、DeepSeekが上のHUD内、GLMがピースのトレイ上の右寄せです。どちらも17項目すべてに合格しました。</p>
+<a class="btn" href="deepseek-v4.1-flash-free/t3_modify/index.html">DeepSeek製の作品を開く（課題3）</a>
+<a class="btn" href="glm-5.3-flash-free/t3_modify/index.html">GLM製の作品を開く（課題3）</a>
+
+<h3>その他の成果物</h3>
+<a class="btn" href="./">課題2・4〜7の出力全文と採点項目（比較ページ）</a>
+<a class="btn" href="https://github.com/8bitgrokbot/deepseek-demo/blob/main/compare/summary.md">summary.md（GitHub）</a>
+
+<h2>6. 未確認・注意</h2>
+<div class="card"><ul>
+<li>iPhone実機での動作、操作感、音は未確認です。確認は、headless Chrome（390×844、タッチ模擬）のみです。</li>
+<li>1課題1回の試行で、無料枠の混雑状況（時間帯）の影響を受けます。</li>
+<li>課題が易しく、採点が満点に張り付いたため、より難しい課題での差は未測定です。</li>
+<li>課題3のベースファイルはDeepSeekの生成物で、DeepSeek側に有利だった可能性があります。</li>
+<li>プロンプトは日本語です。トークン数は、ログの一部で取得できていません。</li>
+<li>無料枠の終了時期とレート制限の値は、未確認です。</li>
+<li>生成ログ（events.jsonl）は公開していません。</li>
+</ul></div>
+
+<h2>7. 課題プロンプトの要約</h2>
+<p class="sub">要約です。全文は<a href="./">比較ページ</a>にあります。</p>
+<details><summary>課題1　ブロック崩しの新規作成</summary>
+<p>単一のindex.htmlで、ブラウザで動くブロック崩しを作る課題です。外部ライブラリ・通信・画像・フォントは使いません。</p>
+<ul><li>スマホ縦画面（幅390px前後）に収まり、横スクロールなし。</li>
+<li>スタートボタン、ドラッグとキー操作のパドル。</li>
+<li>ブロックは5行×8列以上で、行ごとに色と得点が違い、消える演出あり。</li>
+<li>ライフ3、ステージクリアで速度上昇、ハイスコアをlocalStorageに保存。</li>
+<li>パドルの当たり位置で反射角が変わる。一時停止、再挑戦、Web Audioの効果音と切り替えボタン。</li>
+<li>自動テスト用に <code>window.__game</code> を公開。</li></ul></details>
+<details><summary>課題2　バグ修正（Python）</summary>
+<p>utils.py のバグを直し、<code>python3 -m unittest test_utils</code> を全て通す課題です。docstringの仕様が正しい仕様です。test_utils.py の変更、関数名・引数の変更は禁止です。直したバグを日本語で報告します。</p></details>
+<details><summary>課題3　既存コードの改修（Undo追加）</summary>
+<p>スマホ向けブロックパズル（8×8盤面）のindex.htmlに、Undo機能を追加する課題です。</p>
+<ul><li><code>#undoBtn</code> と残り回数 <code>#undoCount</code> を、常に見える位置に置く。</li>
+<li>直前の設置1手だけを取り消し、盤面・スコア・コンボ・トレイを元に戻す。消えたラインも戻す。</li>
+<li>1ゲーム3回まで。使えない間はボタンをdisabledにする。リスタートで3回に戻す。</li>
+<li>既存機能と既存の <code>window.__game</code> のAPIを壊さない。<code>undo()</code> と <code>undoLeft</code> を追加する。</li></ul></details>
+<details><summary>課題4　論理・算数（8問）</summary>
+<p>合同式、平均時速、確率、倍数の個数、三段論法、べき乗の和、正直者と嘘つき、時計の角度の8問です。説明なしで「Q1: 答え」の8行だけを出力します。</p></details>
+<details><summary>課題5　日本語の議事メモ整理</summary>
+<p>架空の町内会の議事メモを、指定形式のMarkdownにまとめる課題です。</p>
+<ul><li>1行目は20文字以内のタイトル。</li>
+<li>見出しは「概要」「決定事項」「未解決の課題」で、それぞれ1〜2文。箇条書きなし。</li>
+<li>「次のアクション」は、ちょうど5つの箇条書き。各40文字以内で、誰が・何を・いつまでにを書く。</li>
+<li>メモにない事実は足さない。前置きとコードブロックなし。</li></ul></details>
+<details><summary>課題6　12条件の物語</summary>
+<p>「雨の日の古い図書館」の短い物語を、12個の条件を満たして書く課題です。</p>
+<ul><li>タイトルは『』で囲み、本文は4段落で、各段落は3文。</li>
+<li>第1段落は「雨」で始め、本文は400〜500字。</li>
+<li>数字とカタカナ（長音記号を含む）は不使用。常体で書く。</li>
+<li>「猫」「時計」「手紙」を含め、感嘆符・疑問符・鉤括弧は不使用。</li>
+<li>最後の段落の最後の文に「鍵」を含め、最終行は「（了）」だけにする。</li></ul></details>
+<details><summary>課題7　CSV集計（ツール使用）</summary>
+<p>sales.csv（架空の雑貨店の2026年上半期の売上）を、PythonかシェルでAIが実際に計算し、report.mdに書く課題です。</p>
+<ul><li>不正な行（数量・単価が空、非数値、0以下）は除外する。</li>
+<li>地域別売上、商品別売上の上位3、月別売上の表と、除外行数を書く。数字はカンマなしの整数。</li>
+<li>使ったスクリプトを analyze.py として保存し、sales.csv は変更しない。</li></ul></details>
+
+<p class="sub" style="margin-top:28px"><a href="../">← デモ集に戻る</a></p>
+</main></body></html>
