@@ -1,0 +1,11 @@
+`utils.py` を修正し、`python3 -m unittest test_utils` の全11テストが通りました。
+
+修正したバグ:
+
+1. **`moving_average`** — ループ範囲が `range(len(values) - window)` で1件足りなかったのを `range(len(values) - window + 1)` に修正。仕様どおり長さ `len(values) - window + 1` の結果を返すようにしました。
+
+2. **`add_tag`** — 引数を直接 `append` して元リストを破壊していた点と、可変デフォルト引数 `tags=[]` で呼び出し間で状態が残っていた点を修正。`item` をコピーし、`tags=None` を既定にして呼び出しごとに独立したリストを返すようにしました。
+
+3. **`parse_duration`** — 分の換算が `mi * 6` になっていたのを `mi * 60` に修正（例: `"1h30m"` → 5400 秒）。
+
+`test_utils.py` は変更せず、関数名・引数名も維持しています。

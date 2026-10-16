@@ -1,0 +1,7 @@
+全 11 テストが通りました（OK）。修正内容：
+
+1. **`moving_average`**: ループ範囲が `len(values) - window` で最後の 1 ブロックが欠落 → `len(values) - window + 1` に修正。
+2. **`add_tag`**: 可変デフォルト引数 `tags=[]` で状態が残る＋引数 `item` を直接変更していた → `tags=None` にして開始時に判定、`list(item)` のコピーに `extend` する形に修正（入力を破壊しない・状態なし）。
+3. **`parse_duration`**: 分の換算が `mi * 6` になっていた（6 倍）→ 正しく `mi * 60` に修正。
+
+`percent_change` と `chunk` は仕様通りだったため変更なし。

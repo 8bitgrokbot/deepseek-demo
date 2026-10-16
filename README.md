@@ -10,5 +10,6 @@
 - `block_blast/` ブロックブラスト風パズル（8x8盤面、ドラッグ配置、コンボ、ハイスコア保存、タッチ操作）
 - `block_blast_deluxe/` ブロックブラスト・豪華版（canvas演出、コンボ5段階、全消し花火、BGM・効果音つき）
 - `minecraft_like/` マイクラ風ブロック世界（素のWebGL、手続き生成地形、チャンクメッシュ、昼夜サイクル、破壊と設置）
+- `compare/` DeepSeek V4.1 Flash Free と GLM-5.3-Flash Free の同一課題比較（7課題、プロンプト・設定・生成物・採点結果つき）
 
 公開ページ: https://8bitgrokbot.github.io/deepseek-demo/

@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#070a16">
+<title>ブロック崩し</title>
+<style>
+  :root{
+    --bg:#070a16;
+    --panel:#131a2e;
+    --line:#23304f;
+    --accent:#7fd4ff;
+    --text:#e5e9f5;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; width:100%; }
+  body{
+    background:radial-gradient(120% 90% at 50% 0%, #101733 0%, var(--bg) 70%);
+    color:var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", "Hiragino Kaku Gothic ProN", "Noto Sans JP", Meiryo, sans-serif;
+    display:flex;
+    justify-content:center;
+    min-height:100vh;
+    overflow-x:hidden;
+    -webkit-user-select:none; user-select:none;
+    -webkit-tap-highlight-color:transparent;
+    touch-action:manipulation;
+  }
+  #app{
+    width:min(100%, 420px);
+    padding:8px 8px 14px;
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+  }
+
+  /* ---- HUD ---- */
+  #hud{ display:flex; flex-direction:column; gap:5px; }
+  .stats{ display:flex; gap:5px; }
+  .stat{
+    flex:1 1 0;
+    min-width:0;
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:9px;
+    padding:3px 4px 4px;
+    text-align:center;
+    line-height:1.15;
+  }
+  .stat .k{ display:block; font-size:10px; letter-spacing:.06em; color:#8fa3c8; }
+  .stat b{ display:block; font-size:16px; color:var(--accent); font-variant-numeric:tabular-nums; }
+  .ctrls{ display:flex; gap:5px; justify-content:flex-end; }
+  button{
+    font-family:inherit;
+    color:var(--text);
+    background:linear-gradient(180deg,#1d2946,#141d33);
+    border:1px solid var(--line);
+    border-radius:9px;
+    padding:7px 12px;
+    font-size:12px;
+    cursor:pointer;
+  }
+  button:active{ transform:translateY(1px); }
+  button:disabled{ opacity:.4; cursor:default; }
+  .mini{ padding:5px 10px; font-size:11px; }
+
+  /* ---- Stage / canvas ---- */
+  #stage-wrap{
+    position:relative;
+    width:min(100%, max(200px, calc((100vh - 215px) * 0.629)));
+    margin:0 auto;
+    border-radius:12px;
+    overflow:hidden;
+    border:1px solid var(--line);
+    background:#0c1226;
+    touch-action:none;
+  }
+  @supports (height:100svh){
+    #stage-wrap{ width:min(100%, max(200px, calc((100svh - 215px) * 0.629))); }
+  }
+  #game{ display:block; width:100%; height:auto; touch-action:none; }
+
+  /* ---- Overlay screens ---- */
+  .screen{
+    position:absolute; inset:0;
+    display:flex; flex-direction:column;
+    align-items:center; justify-content:center;
+    gap:10px;
+    padding:18px;
+    text-align:center;
+    background:rgba(6,10,22,.82);
+    backdrop-filter:blur(3px);
+    -webkit-backdrop-filter:blur(3px);
+    z-index:2;
+  }
+  .screen[hidden]{ display:none !important; }
+  .screen h1{ margin:0; font-size:26px; letter-spacing:.08em; }
+  .screen h2{ margin:0; font-size:20px; letter-spacing:.06em; }
+  .screen p{ margin:0; font-size:12px; color:#a9b8d6; line-height:1.7; }
+  .score-line{ font-size:13px; color:#c8d5ee; }
+  .score-line b{ color:var(--accent); font-size:18px; font-variant-numeric:tabular-nums; }
+  #start-btn{
+    font-size:18px; padding:12px 34px; border-radius:12px;
+    background:linear-gradient(180deg,#2b62c9,#1b3f8a);
+    border-color:#4a7fe0; font-weight:700; letter-spacing:.12em;
+  }
+  .hint{ font-size:11px; color:#7f90b0; line-height:1.6; }
+  .badge{ font-size:11px; color:#8fa3c8; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header id="hud">
+    <div class="stats">
+      <div class="stat"><span class="k">スコア</span><b id="ui-score">0</b></div>
+      <div class="stat"><span class="k">ライフ</span><b id="ui-lives">3</b></div>
+      <div class="stat"><span class="k">ステージ</span><b id="ui-stage">1</b></div>
+    </div>
+    <div class="ctrls">
+      <button id="sound-btn" class="mini" type="button">音 ON</button>
+      <button id="pause-btn" class="mini" type="button" disabled>一時停止</button>
+    </div>
+  </header>
+
+  <div id="stage-wrap">
+    <canvas id="game" width="390" height="620" aria-label="ブロック崩しゲーム画面"></canvas>
+
+    <!-- タイトル -->
+    <section id="screen-title" class="screen">
+      <h1>ブロック崩し</h1>
+      <p class="score-line">ハイスコア <b id="ui-high-title">0</b></p>
+      <button id="start-btn" type="button">スタート</button>
+      <p class="hint">
+        ドラッグ / マウス移動 / ←→キー でパドル操作<br>
+        P キーで一時停止
+      </p>
+    </section>
+
+    <!-- 一時停止 -->
+    <section id="screen-pause" class="screen" hidden>
+      <h2>一時停止</h2>
+      <p>P キー、または下のボタンで再開します</p>
+      <button id="resume-btn" type="button">再開</button>
+    </section>
+
+    <!-- ゲームオーバー -->
+    <section id="screen-gameover" class="screen" hidden>
+      <h2>ゲームオーバー</h2>
+      <p class="score-line">スコア <b id="ui-score-over">0</b></p>
+      <p class="score-line">ハイスコア <b id="ui-high-over">0</b></p>
+      <button id="retry-btn" type="button">もう一度</button>
+    </section>
+
+    <!-- ステージクリア -->
+    <section id="screen-clear" class="screen" hidden>
+      <h2>ステージクリア</h2>
+      <p class="score-line">スコア <b id="ui-score-clear">0</b></p>
+      <p>次のステージはボールが速くなります</p>
+      <button id="next-btn" type="button">次のステージへ</button>
+    </section>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* =========================================================
+     基本設定
+  ========================================================= */
+  const W = 390;              // 論理解像度（canvas 座標系）
+  const H = 620;
+
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+
+  let dpr = 1;
+  function setupCanvas() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.round(W * dpr);
+    canvas.height = Math.round(H * dpr);
+  }
+  setupCanvas();
+  window.addEventListener('resize', setupCanvas);
+
+  /* ---- ブロック定義（8列 × 5行、上の行ほど高得点） ---- */
+  const COLS = 8, ROWS = 5;
+  const ROW_STYLE = [
+    { base: '#ff4d6d', light: '#ff93a6', points: 50 },
+    { base: '#ff9f43', light: '#ffc489', points: 40 },
+    { base: '#ffd93d', light: '#ffe98a', points: 30 },
+    { base: '#4ade80', light: '#9af0b8', points: 20 },
+    { base: '#38bdf8', light: '#8fdcff', points: 10 }
+  ];
+  const BLOCK_TOP = 58;
+  const BLOCK_H = 22;
+  const BLOCK_GAP = 6;
+  const SIDE_MARGIN = 14;
+
+  /* ---- パドル / ボール ---- */
+  const PADDLE_W = 82;
+  const PADDLE_H = 12;
+  const PADDLE_Y = H - 46;
+  const BALL_R = 7;
+  const MAX_BOUNCE_ANGLE = Math.PI / 3;   // パドル反射の最大角（垂直から60°）
+  const MIN_VERTICAL_RATIO = 0.22;        // 水平に近づきすぎないための最低縦成分
+
+  const paddle = { x: W / 2, y: PADDLE_Y, w: PADDLE_W, h: PADDLE_H };
+  const ball = { x: W / 2, y: PADDLE_Y - BALL_R - 2, vx: 0, vy: 0, r: BALL_R, attached: true };
+
+  /* ---- 状態 ---- */
+  let state = 'title';       // title | playing | paused | gameover | clear
+  let score = 0;
+  let lives = 3;
+  let stage = 1;
+  let bricks = [];
+  let particles = [];
+  let effects = [];
+  let launchTimer = 0;
+  let currentSpeed = 250;
+
+  const HS_KEY = 'block_breaker_highscore_v1';
+  function getHighScore() {
+    try {
+      const v = parseInt(window.localStorage.getItem(HS_KEY) || '0', 10);
+      return isNaN(v) ? 0 : v;
+    } catch (e) { return 0; }
+  }
+  function saveHighScore() {
+    try {
+      if (score > getHighScore()) window.localStorage.setItem(HS_KEY, String(score));
+    } catch (e) { /* localStorage 不可の環境では無視 */ }
+  }
+
+  /* =========================================================
+     サウンド（Web Audio API）
+  ========================================================= */
+  let audioCtx = null;
+  let muted = false;
+
+  function ensureAudio() {
+    try {
+      if (!audioCtx) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (AC) audioCtx = new AC();
+      }
+      if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+    } catch (e) { audioCtx = null; }
+  }
+
+  function tone(opts) {
+    if (muted) return;
+    ensureAudio();
+    if (!audioCtx) return;
+    const now = audioCtx.currentTime;
+    const dur = opts.dur || 0.08;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = opts.type || 'square';
+    osc.frequency.setValueAtTime(opts.freq, now);
+    if (opts.to) osc.frequency.exponentialRampToValueAtTime(Math.max(1, opts.to), now + dur);
+    const vol = opts.vol == null ? 0.08 : opts.vol;
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(vol, now + 0.008);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+    osc.connect(gain); gain.connect(audioCtx.destination);
+    osc.start(now); osc.stop(now + dur + 0.02);
+  }
+
+  const sfxBlock = (row) => tone({ freq: 420 + (ROWS - row) * 80, dur: 0.075, type: 'square', vol: 0.06 });
+  const sfxBounce = () => tone({ freq: 300, dur: 0.06, type: 'triangle', vol: 0.09 });
+  const sfxWall = () => tone({ freq: 220, dur: 0.045, type: 'sine', vol: 0.05 });
+  const sfxMiss = () => tone({ freq: 340, to: 80, dur: 0.42, type: 'sawtooth', vol: 0.09 });
+  const sfxClear = () => {
+    tone({ freq: 523, dur: 0.1, type: 'square', vol: 0.07 });
+    setTimeout(() => tone({ freq: 659, dur: 0.1, type: 'square', vol: 0.07 }), 110);
+    setTimeout(() => tone({ freq: 784, dur: 0.18, type: 'square', vol: 0.07 }), 220);
+  };
+  const sfxOver = () => {
+    tone({ freq: 392, to: 130, dur: 0.7, type: 'sawtooth', vol: 0.09 });
+  };
+
+  /* =========================================================
+     DOM
+  ========================================================= */
+  const $ = (id) => document.getElementById(id);
+  const ui = {
+    score: $('ui-score'), lives: $('ui-lives'), stage: $('ui-stage'),
+    highTitle: $('ui-high-title'), scoreOver: $('ui-score-over'), highOver: $('ui-high-over'),
+    scoreClear: $('ui-score-clear'),
+    start: $('start-btn'), pause: $('pause-btn'), resume: $('resume-btn'),
+    retry: $('retry-btn'), next: $('next-btn'), sound: $('sound-btn'),
+    screens: {
+      title: $('screen-title'),
+      pause: $('screen-pause'),
+      gameover: $('screen-gameover'),
+      clear: $('screen-clear')
+    }
+  };
+
+  function showScreen(name) {
+    for (const key in ui.screens) {
+      if (ui.screens[key]) ui.screens[key].hidden = (key !== name);
+    }
+  }
+
+  function updateHud() {
+    ui.score.textContent = score;
+    ui.lives.textContent = lives;
+    ui.stage.textContent = stage;
+    ui.highTitle.textContent = getHighScore();
+    ui.highOver.textContent = getHighScore();
+    ui.scoreOver.textContent = score;
+    ui.scoreClear.textContent = score;
+  }
+
+  /* =========================================================
+     ゲーム構築
+  ========================================================= */
+  function currentBallSpeed() {
+    return Math.min(250 + (stage - 1) * 45, 640);
+  }
+
+  function createBricks() {
+    bricks = [];
+    const usable = W - SIDE_MARGIN * 2;
+    const bw = (usable - BLOCK_GAP * (COLS - 1)) / COLS;
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        bricks.push({
+          x: SIDE_MARGIN + c * (bw + BLOCK_GAP),
+          y: BLOCK_TOP + r * (BLOCK_H + BLOCK_GAP),
+          w: bw, h: BLOCK_H,
+          row: r,
+          color: ROW_STYLE[r].base,
+          points: ROW_STYLE[r].points,
+          alive: true
+        });
+      }
+    }
+  }
+
+  function bricksLeft() {
+    let n = 0;
+    for (let i = 0; i < bricks.length; i++) if (bricks[i].alive) n++;
+    return n;
+  }
+
+  function clampPaddle() {
+    const half = paddle.w / 2;
+    if (paddle.x < half) paddle.x = half;
+    if (paddle.x > W - half) paddle.x = W - half;
+  }
+
+  function resetBall() {
+    ball.attached = true;
+    ball.x = paddle.x;
+    ball.y = paddle.y - ball.r - 2;
+    ball.vx = 0;
+    ball.vy = 0;
+    launchTimer = 1.0;
+    currentSpeed = currentBallSpeed();
+  }
+
+  function launchBall() {
+    if (!ball.attached) return;
+    currentSpeed = currentBallSpeed();
+    let a = (Math.random() * 2 - 1) * (Math.PI / 3.2);
+    if (Math.abs(a) < 0.16) a = (a < 0 ? -1 : 1) * 0.16;
+    ball.vx = Math.sin(a) * currentSpeed;
+    ball.vy = -Math.cos(a) * currentSpeed;
+    ball.attached = false;
+  }
+
+  function startGame() {
+    score = 0;
+    lives = 3;
+    stage = 1;
+    particles = [];
+    effects = [];
+    paddle.x = W / 2;
+    createBricks();
+    resetBall();
+    state = 'playing';
+    showScreen(null);
+    ui.pause.disabled = false;
+    ui.pause.textContent = '一時停止';
+    updateHud();
+    ensureAudio();
+  }
+
+  function nextStage() {
+    stage += 1;
+    particles = [];
+    effects = [];
+    paddle.x = W / 2;
+    createBricks();
+    resetBall();
+    state = 'playing';
+    showScreen(null);
+    ui.pause.disabled = false;
+    ui.pause.textContent = '一時停止';
+    updateHud();
+  }
+
+  function gameOver() {
+    state = 'gameover';
+    saveHighScore();
+    updateHud();
+    ui.pause.disabled = true;
+    showScreen('gameover');
+    sfxOver();
+  }
+
+  function stageClear() {
+    state = 'clear';
+    saveHighScore();
+    paddle.x = W / 2;
+    updateHud();
+    ui.pause.disabled = true;
+    showScreen('clear');
+    sfxClear();
+  }
+
+  function togglePause() {
+    if (state === 'playing') {
+      state = 'paused';
+      ui.pause.textContent = '再開';
+      showScreen('pause');
+    } else if (state === 'paused') {
+      state = 'playing';
+      ui.pause.textContent = '一時停止';
+      showScreen(null);
+    }
+  }
+
+  /* =========================================================
+     エフェクト
+  ========================================================= */
+  function spawnBrickBreak(b) {
+    effects.push({ x: b.x, y: b.y, w: b.w, h: b.h, color: b.color, t: 0, dur: 0.22 });
+    const n = 10;
+    for (let i = 0; i < n; i++) {
+      const ang = Math.random() * Math.PI * 2;
+      const sp = 60 + Math.random() * 200;
+      particles.push({
+        x: b.x + Math.random() * b.w,
+        y: b.y + Math.random() * b.h,
+        vx: Math.cos(ang) * sp,
+        vy: Math.sin(ang) * sp - 60,
+        size: 1.6 + Math.random() * 2.6,
+        life: 0.35 + Math.random() * 0.35,
+        maxLife: 0.7,
+        color: Math.random() < 0.45 ? '#ffffff' : b.color
+      });
+    }
+  }
+
+  function updateEffects(dt) {
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.vy += 900 * dt;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.life -= dt;
+      if (p.life <= 0 || p.y > H + 30) particles.splice(i, 1);
+    }
+    for (let i = effects.length - 1; i >= 0; i--) {
+      const e = effects[i];
+      e.t += dt;
+      if (e.t >= e.dur) effects.splice(i, 1);
+    }
+  }
+
+  /* =========================================================
+     入力
+  ========================================================= */
+  const keys = { left: false, right: false };
+  let pointerDown = false;
+
+  function clientToCanvasX(clientX) {
+    const rect = canvas.getBoundingClientRect();
+    if (!rect.width) return paddle.x;
+    return (clientX - rect.left) / rect.width * W;
+  }
+
+  function movePaddleTo(x) {
+    if (state !== 'playing' && state !== 'paused') return;
+    paddle.x = x;
+    clampPaddle();
+  }
+
+  canvas.addEventListener('pointerdown', (e) => {
+    pointerDown = true;
+    if (canvas.setPointerCapture && e.pointerId != null) {
+      try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
+    }
+    movePaddleTo(clientToCanvasX(e.clientX));
+    if (state === 'playing' && ball.attached) launchBall();
+    e.preventDefault();
+  }, { passive: false });
+
+  canvas.addEventListener('pointermove', (e) => {
+    if (pointerDown || e.pointerType === 'mouse') {
+      movePaddleTo(clientToCanvasX(e.clientX));
+    }
+    e.preventDefault();
+  }, { passive: false });
+
+  function endPointer() { pointerDown = false; }
+  window.addEventListener('pointerup', endPointer);
+  window.addEventListener('pointercancel', endPointer);
+  window.addEventListener('blur', endPointer);
+
+  window.addEventListener('keydown', (e) => {
+    const k = e.key;
+    if (k === 'ArrowLeft' || k === 'a' || k === 'A') { keys.left = true; e.preventDefault(); }
+    else if (k === 'ArrowRight' || k === 'd' || k === 'D') { keys.right = true; e.preventDefault(); }
+    else if (k === 'p' || k === 'P') { togglePause(); e.preventDefault(); }
+    else if (k === ' ' || k === 'Enter') {
+      if (state === 'playing' && ball.attached) launchBall();
+      e.preventDefault();
+    }
+  });
+
+  window.addEventListener('keyup', (e) => {
+    const k = e.key;
+    if (k === 'ArrowLeft' || k === 'a' || k === 'A') keys.left = false;
+    else if (k === 'ArrowRight' || k === 'd' || k === 'D') keys.right = false;
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden && state === 'playing') togglePause();
+  });
+
+  /* ---- ボタン ---- */
+  ui.start.addEventListener('click', () => { ensureAudio(); startGame(); });
+  ui.retry.addEventListener('click', () => { ensureAudio(); startGame(); });
+  ui.next.addEventListener('click', () => { ensureAudio(); nextStage(); });
+  ui.resume.addEventListener('click', () => togglePause());
+  ui.pause.addEventListener('click', () => { ensureAudio(); togglePause(); });
+  ui.sound.addEventListener('click', () => {
+    muted = !muted;
+    ui.sound.textContent = muted ? '音 OFF' : '音 ON';
+    if (!muted) { ensureAudio(); tone({ freq: 660, dur: 0.08, type: 'square', vol: 0.06 }); }
+  });
+
+  /* =========================================================
+     更新
+  ========================================================= */
+  const KEY_SPEED = 540;
+
+  function normalizeVelocity() {
+    const sp = currentSpeed;
+    const mag = Math.hypot(ball.vx, ball.vy);
+    if (mag > 0.0001) {
+      ball.vx = ball.vx / mag * sp;
+      ball.vy = ball.vy / mag * sp;
+    }
+    // 水平に近くなりすぎないよう最低限の縦成分を保証
+    if (Math.abs(ball.vy) < sp * MIN_VERTICAL_RATIO) {
+      const vy = (ball.vy < 0 ? -1 : 1) * sp * MIN_VERTICAL_RATIO;
+      const vxSign = ball.vx < 0 ? -1 : 1;
+      const vx = vxSign * Math.sqrt(Math.max(sp * sp - vy * vy, 0));
+      ball.vx = vx;
+      ball.vy = vy;
+    }
+  }
+
+  function hitBricks() {
+    for (let i = 0; i < bricks.length; i++) {
+      const b = bricks[i];
+      if (!b.alive) continue;
+      const cx = Math.max(b.x, Math.min(ball.x, b.x + b.w));
+      const cy = Math.max(b.y, Math.min(ball.y, b.y + b.h));
+      const dx = ball.x - cx;
+      const dy = ball.y - cy;
+      if (dx * dx + dy * dy > ball.r * ball.r) continue;
+
+      // めり込み量が小さい軸で反射
+      const overlapL = (ball.x + ball.r) - b.x;
+      const overlapR = (b.x + b.w) - (ball.x - ball.r);
+      const overlapT = (ball.y + ball.r) - b.y;
+      const overlapB = (b.y + b.h) - (ball.y - ball.r);
+      const minOverlap = Math.min(overlapL, overlapR, overlapT, overlapB);
+
+      if (minOverlap === overlapL) { ball.x = b.x - ball.r; ball.vx = -Math.abs(ball.vx); }
+      else if (minOverlap === overlapR) { ball.x = b.x + b.w + ball.r; ball.vx = Math.abs(ball.vx); }
+      else if (minOverlap === overlapT) { ball.y = b.y - ball.r; ball.vy = -Math.abs(ball.vy); }
+      else { ball.y = b.y + b.h + ball.r; ball.vy = Math.abs(ball.vy); }
+
+      b.alive = false;
+      score += b.points;
+      spawnBrickBreak(b);
+      sfxBlock(b.row);
+      updateHud();
+      return; // 1フレーム1個まで
+    }
+  }
+
+  function update(dt) {
+    if (state !== 'playing') return;
+
+    // キーボード操作
+    if (keys.left) paddle.x -= KEY_SPEED * dt;
+    if (keys.right) paddle.x += KEY_SPEED * dt;
+    clampPaddle();
+
+    // 発射待ち
+    if (ball.attached) {
+      ball.x = paddle.x;
+      ball.y = paddle.y - ball.r - 2;
+      launchTimer -= dt;
+      if (launchTimer <= 0) launchBall();
+      updateEffects(dt);
+      return;
+    }
+
+    ball.x += ball.vx * dt;
+    ball.y += ball.vy * dt;
+
+    // 壁反射
+    if (ball.x - ball.r < 0) { ball.x = ball.r; ball.vx = Math.abs(ball.vx); sfxWall(); }
+    else if (ball.x + ball.r > W) { ball.x = W - ball.r; ball.vx = -Math.abs(ball.vx); sfxWall(); }
+    if (ball.y - ball.r < 0) { ball.y = ball.r; ball.vy = Math.abs(ball.vy); sfxWall(); }
+
+    // パドル反射（当たった位置で角度が変わる）
+    if (ball.vy > 0 &&
+        ball.y + ball.r >= paddle.y &&
+        ball.y - ball.r <= paddle.y + paddle.h &&
+        ball.x + ball.r >= paddle.x - paddle.w / 2 &&
+        ball.x - ball.r <= paddle.x + paddle.w / 2) {
+      ball.y = paddle.y - ball.r;
+      let hit = (ball.x - paddle.x) / (paddle.w / 2);
+      hit = Math.max(-1, Math.min(1, hit));
+      const angle = hit * MAX_BOUNCE_ANGLE;
+      currentSpeed = currentBallSpeed();
+      ball.vx = Math.sin(angle) * currentSpeed;
+      ball.vy = -Math.cos(angle) * currentSpeed;
+      sfxBounce();
+    }
+
+    normalizeVelocity();
+    hitBricks();
+
+    // 落下チェック
+    if (ball.y - ball.r > H) {
+      lives -= 1;
+      updateHud();
+      if (lives <= 0) {
+        sfxMiss();
+        gameOver();
+        return;
+      }
+      sfxMiss();
+      resetBall();
+      updateEffects(dt);
+      return;
+    }
+
+    // クリア判定
+    if (bricksLeft() === 0) {
+      stageClear();
+      return;
+    }
+
+    updateEffects(dt);
+  }
+
+  /* =========================================================
+     描画
+  ========================================================= */
+  function roundRect(x, y, w, h, r) {
+    const rr = Math.min(r, w / 2, h / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + rr, y);
+    ctx.arcTo(x + w, y, x + w, y + h, rr);
+    ctx.arcTo(x + w, y + h, x, y + h, rr);
+    ctx.arcTo(x, y + h, x, y, rr);
+    ctx.arcTo(x, y, x + w, y, rr);
+    ctx.closePath();
+  }
+
+  function drawBrick(b) {
+    const st = ROW_STYLE[b.row];
+    const grd = ctx.createLinearGradient(0, b.y, 0, b.y + b.h);
+    grd.addColorStop(0, st.light);
+    grd.addColorStop(1, st.base);
+    roundRect(b.x, b.y, b.w, b.h, 6);
+    ctx.fillStyle = grd;
+    ctx.fill();
+
+    ctx.fillStyle = 'rgba(255,255,255,0.30)';
+    roundRect(b.x + 3, b.y + 3, b.w - 6, 3, 1.5);
+    ctx.fill();
+
+    ctx.fillStyle = 'rgba(0,0,0,0.18)';
+    roundRect(b.x + 3, b.y + b.h - 5, b.w - 6, 2.5, 1.25);
+    ctx.fill();
+  }
+
+  function drawPaddle() {
+    const grd = ctx.createLinearGradient(0, paddle.y, 0, paddle.y + paddle.h);
+    grd.addColorStop(0, '#a9e9ff');
+    grd.addColorStop(1, '#2b7fd4');
+    roundRect(paddle.x - paddle.w / 2, paddle.y, paddle.w, paddle.h, 6);
+    ctx.fillStyle = grd;
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.45)';
+    roundRect(paddle.x - paddle.w / 2 + 5, paddle.y + 2.5, paddle.w - 10, 2, 1);
+    ctx.fill();
+  }
+
+  function drawBall() {
+    ctx.save();
+    ctx.shadowColor = 'rgba(150,215,255,0.95)';
+    ctx.shadowBlur = 14;
+    const grd = ctx.createRadialGradient(ball.x - 2, ball.y - 2, 1, ball.x, ball.y, ball.r);
+    grd.addColorStop(0, '#ffffff');
+    grd.addColorStop(1, '#79c8ff');
+    ctx.beginPath();
+    ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2);
+    ctx.fillStyle = grd;
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function render() {
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    const bg = ctx.createLinearGradient(0, 0, 0, H);
+    bg.addColorStop(0, '#0d1428');
+    bg.addColorStop(1, '#151d3a');
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+
+    // 薄いグリッド
+    ctx.strokeStyle = 'rgba(120,170,255,0.055)';
+    ctx.lineWidth = 1;
+    for (let y = 40; y < H; y += 40) {
+      ctx.beginPath(); ctx.moveTo(0, y + 0.5); ctx.lineTo(W, y + 0.5); ctx.stroke();
+    }
+
+    // ブロック
+    for (let i = 0; i < bricks.length; i++) {
+      if (bricks[i].alive) drawBrick(bricks[i]);
+    }
+
+    // 破壊演出（縮小 + フェード）
+    for (let i = 0; i < effects.length; i++) {
+      const e = effects[i];
+      const p = Math.min(e.t / e.dur, 1);
+      const s = 1 + p * 0.55;
+      const cx = e.x + e.w / 2, cy = e.y + e.h / 2;
+      ctx.save();
+      ctx.globalAlpha = (1 - p) * 0.85;
+      roundRect(cx - (e.w * s) / 2, cy - (e.h * s) / 2, e.w * s, e.h * s, 7);
+      ctx.fillStyle = e.color;
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // 粒
+    for (let i = 0; i < particles.length; i++) {
+      const pt = particles[i];
+      const alpha = Math.max(0, Math.min(1, pt.life / pt.maxLife));
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = pt.color;
+      ctx.beginPath();
+      ctx.arc(pt.x, pt.y, pt.size, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    drawPaddle();
+    drawBall();
+
+    // 発射待ちのヒント
+    if (state === 'playing' && ball.attached) {
+      ctx.fillStyle = 'rgba(200,220,255,0.75)';
+      ctx.font = '13px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('タップ / クリック / スペース で発射', W / 2, PADDLE_Y - 42);
+      ctx.textAlign = 'left';
+    }
+
+    // 枠
+    ctx.strokeStyle = 'rgba(120,170,255,0.16)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(1, 1, W - 2, H - 2);
+  }
+
+  /* =========================================================
+     メインループ
+  ========================================================= */
+  let lastTime = 0;
+  function loop(ts) {
+    if (!lastTime) lastTime = ts;
+    let dt = (ts - lastTime) / 1000;
+    lastTime = ts;
+    if (dt > 1 / 30) dt = 1 / 30;
+    if (dt < 0) dt = 0;
+
+    update(dt);
+    render();
+    window.requestAnimationFrame(loop);
+  }
+
+  /* =========================================================
+     初期化
+  ========================================================= */
+  createBricks();
+  resetBall();
+  updateHud();
+  showScreen('title');
+
+  /* ---- 自動テスト用グローバル ---- */
+  Object.defineProperty(window, '__game', {
+    configurable: true,
+    value: {
+      get state() { return state; },
+      get score() { return score; },
+      get lives() { return lives; },
+      get stage() { return stage; },
+      get paddleX() { return paddle.x; },
+      get ballX() { return ball.x; },
+      get ballY() { return ball.y; },
+      get bricksLeft() { return bricksLeft(); }
+    }
+  });
+
+  window.requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

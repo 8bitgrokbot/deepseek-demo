@@ -1,0 +1,231 @@
+<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>同一課題の比較: DeepSeek V4.1 Flash Free と GLM-5.3-Flash Free</title>
+<style>body{margin:0;font-family:system-ui,sans-serif;background:#111827;color:#e5e7eb;padding:16px;line-height:1.55}a{color:#7dd3fc}h1{font-size:1.4rem}h3{border-bottom:1px solid #374151;padding-bottom:4px}
+table{border-collapse:collapse;font-size:.82rem;margin:8px 0;display:block;overflow-x:auto}td,th{border:1px solid #374151;padding:4px 8px;vertical-align:top}th{background:#1f2937}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:12px}@media(max-width:700px){.pair{grid-template-columns:1fr}}.col{background:#1f2937;border-radius:8px;padding:10px;min-width:0}.col img{width:100%;max-width:300px;border-radius:6px;margin-top:6px}
+pre{white-space:pre-wrap;word-break:break-word;font-size:.8rem;background:#0b1220;padding:8px;border-radius:6px;max-height:420px;overflow:auto}details{margin:6px 0}summary{cursor:pointer}.ok{color:#4ade80;text-align:center}.ng{color:#f87171;text-align:center}small{color:#9ca3af}</style></head><body>
+<h1>同一課題での比較: DeepSeek V4.1 Flash Free と GLM-5.3-Flash Free</h1>
+<p>OpenCode上の無料モデル2つに、<b>一字一句同じプロンプト</b>・同じ設定・新規セッション・原則一発出しで7課題を解かせた記録です。生成物は人手を加えずそのまま置いています。並びは名前のアルファベット順で、体裁は同一です。<br>各課題は1回の試行なので、統計的な差の主張はできません。</p>
+<h2>条件</h2><ul>
+<li>モデルID: <code>opencode/deepseek-v4.1-flash-free</code> / <code>opencode/glm-5.3-flash-free</code>（<code>-m</code>だけを変更）</li>
+<li>実行: opencode v2.0.29 の <code>opencode run --standalone --auto --format json -m &lt;model&gt; "&lt;prompt.txtの内容&gt;" &lt;/dev/null</code></li>
+<li>設定: <code>{"agents":{"title":{"disabled":true}}}</code> のみ。AGENTS.md・追加指示なし。標準ツール（read/write/edit/shell等）を両者同じく利用可。</li>
+<li>環境: 実行ごとに新規のXDGディレクトリと作業ディレクトリ(/tmp/work、初期ファイルは課題ごとに同一)。bwrapサンドボックス内、箱の他ファイルは見えない。</li>
+<li>試行方針: 原則1回。インフラ起因（Model unavailable、ECONNRESET、サーバーエラー、レート制限）で何も得られなかった場合のみ、同じプロンプトで新規セッションを再実行し、回数を表に記録。出来の悪さによる再試行はしていない。タイムアウトは1回1200秒。</li>
+<li>実行順: 課題ごとに交互（奇数課題はDeepSeek先、偶数課題はGLM先）。</li>
+<li>採点: 自動チェックのみ（LLM判定なし）。文章の中身は下の並置で目視比較できます。</li></ul>
+<h2>結果表</h2><table><tr><th>課題</th><th>モデル</th><th>採点(合格/項目)</th><th>所要(秒,最終試行)</th><th>エラー(最終)</th><th>再試行</th><th>タイムアウト(最終)</th><th>ツール呼出</th><th>出力サイズ</th></tr>
+<tr><td rowspan=2><b>1. ブラウザゲーム新規作成(ブロック崩し)</b><br><small>単一index.html、スマホタッチ、window.__gameで自動テスト</small></td><td>DeepSeek V4.1 Flash Free</td><td><b>26/26</b></td><td>126.4</td><td>なし</td><td>なし</td><td>なし</td><td>3</td><td>1074字(最終返答) / ファイル計26399B</td></tr>
+<tr><td>GLM-5.3-Flash Free</td><td><b>26/26</b></td><td>1851.0</td><td>あり(Connection lost while reading the response: ECON; Streaming response failed: [server_error] reques)</td><td>3回<br><small>Model unavailable: opencode/glm-5.3-flas / タイムアウトConnection lost while reading the respon;Streaming response failed: [server_error / Model unavailable: opencode/glm-5.3-flas</small></td><td>あり</td><td>9</td><td>82字(最終返答) / ファイル計19532B</td></tr>
+<tr><td rowspan=2><b>2. バグ修正(Python、バグ3つ)</b><br><small>utils.pyの3バグを直し、公開11+隠し11テストで採点</small></td><td>DeepSeek V4.1 Flash Free</td><td><b>6/6</b></td><td>13.7</td><td>なし</td><td>なし</td><td>なし</td><td>6</td><td>513字(最終返答) / ファイル計4540B</td></tr>
+<tr><td>GLM-5.3-Flash Free</td><td><b>6/6</b></td><td>77.6</td><td>なし</td><td>なし</td><td>なし</td><td>6</td><td>385字(最終返答) / ファイル計4562B</td></tr>
+<tr><td rowspan=2><b>3. 既存コード改修(ブロックパズルにUndo追加)</b><br><small>公開済みblock_blastにUndo機能。17項目の自動ブラウザテスト</small></td><td>DeepSeek V4.1 Flash Free</td><td><b>17/17</b></td><td>209.4</td><td>なし</td><td>なし</td><td>なし</td><td>33</td><td>1342字(最終返答) / ファイル計38906B</td></tr>
+<tr><td>GLM-5.3-Flash Free</td><td><b>17/17</b></td><td>673.0</td><td>なし</td><td>なし</td><td>なし</td><td>18</td><td>857字(最終返答) / ファイル計38700B</td></tr>
+<tr><td rowspan=2><b>4. 論理・算数(8問)</b><br><small>短答8問を自動採点</small></td><td>DeepSeek V4.1 Flash Free</td><td><b>9/9</b></td><td>5.3</td><td>なし</td><td>1回<br><small>Model unavailable: opencode/deepseek-v4.</small></td><td>なし</td><td>0</td><td>58字(最終返答)</td></tr>
+<tr><td>GLM-5.3-Flash Free</td><td><b>9/9</b></td><td>24.1</td><td>なし</td><td>なし</td><td>なし</td><td>0</td><td>58字(最終返答)</td></tr>
+<tr><td rowspan=2><b>5. 日本語の整理・要約(架空議事メモ)</b><br><small>指定フォーマットを自動チェック、内容は目視で比較</small></td><td>DeepSeek V4.1 Flash Free</td><td><b>8/8</b></td><td>15.4</td><td>なし</td><td>なし</td><td>なし</td><td>0</td><td>443字(最終返答)</td></tr>
+<tr><td>GLM-5.3-Flash Free</td><td><b>8/8</b></td><td>132.6</td><td>なし</td><td>なし</td><td>なし</td><td>0</td><td>508字(最終返答)</td></tr>
+<tr><td rowspan=2><b>6. 長文の指示遵守(12条件の物語)</b><br><small>12条件を制約ごとに自動チェック</small></td><td>DeepSeek V4.1 Flash Free</td><td><b>14/14</b></td><td>43.8</td><td>なし</td><td>なし</td><td>なし</td><td>1</td><td>463字(最終返答)</td></tr>
+<tr><td>GLM-5.3-Flash Free</td><td><b>14/14</b></td><td>107.4</td><td>なし</td><td>1回<br><small>Model unavailable: opencode/glm-5.3-flas</small></td><td>なし</td><td>3</td><td>473字(最終返答) / ファイル計1400B</td></tr>
+<tr><td rowspan=2><b>7. ツール使用(CSV集計→report.md)</b><br><small>集計値をスクリプトで検証</small></td><td>DeepSeek V4.1 Flash Free</td><td><b>8/8</b></td><td>20.9</td><td>なし</td><td>なし</td><td>なし</td><td>8</td><td>236字(最終返答) / ファイル計13443B</td></tr>
+<tr><td>GLM-5.3-Flash Free</td><td><b>8/8</b></td><td>43.0</td><td>なし</td><td>なし</td><td>なし</td><td>4</td><td>192字(最終返答) / ファイル計12434B</td></tr>
+</table>
+<p><small>所要時間は最終試行のみ。再試行した場合の失敗試行の内訳は「再試行」欄、全データは <a href="results.jsonl">results.jsonl</a>。</small></p>
+<h2>採点項目の詳細</h2><details><summary>1. ブラウザゲーム新規作成(ブロック崩し) — 採点項目の詳細</summary><table class=d><tr><th>項目</th><th>DeepSeek V4.1 Flash Free</th><th>GLM-5.3-Flash Free</th></tr><tr><td>index.html が存在</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>外部リソース参照なし</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>Web Audio API 使用(AudioContext)</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>localStorage 使用</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>&lt;canvas id=game&gt; がある</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>window.__game が公開(必要プロパティ)</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>初期stateが&#x27;title&#x27;</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>#start-btn が表示される</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>横スクロールなし(390px)</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>canvasが画面幅に収まる</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>スタートでstate=&#x27;playing&#x27;</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>ブロック40個以上(5行x8列以上)</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>ボールが動く</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>タッチドラッグでパドルが左右に動く</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>左右キーでパドルが動く</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>Pキーで一時停止(state/ボール停止)</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>Pキーで再開</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>追従プレイでスコアが増える/ブロックが減る</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>ライフが3で開始(減少はミス時のみ)</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>画面上にスコア/ライフ/ステージ表示(文字)</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>音の切替ボタンがある</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>ミス放置でstate=&#x27;gameover&#x27;(ライフ0)</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>ハイスコアがlocalStorageに保存される</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>ゲームオーバー画面に再挑戦ボタン/ハイスコア表示</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>再挑戦でplaying・ライフ3に戻る</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>コンソールエラー無し</td><td class=ok>○</td><td class=ok>○</td></tr></table></details>
+<details><summary>2. バグ修正(Python、バグ3つ) — 採点項目の詳細</summary><table class=d><tr><th>項目</th><th>DeepSeek V4.1 Flash Free</th><th>GLM-5.3-Flash Free</th></tr><tr><td>test_utils.py 未変更</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>公開テスト全通過(11/11)</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>隠しテスト全通過(11/11)</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>バグ修正:moving_average</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>バグ修正:add_tag</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>バグ修正:parse_duration</td><td class=ok>○</td><td class=ok>○</td></tr></table></details>
+<details><summary>3. 既存コード改修(ブロックパズルにUndo追加) — 採点項目の詳細</summary><table class=d><tr><th>項目</th><th>DeepSeek V4.1 Flash Free</th><th>GLM-5.3-Flash Free</th></tr><tr><td>既存API(place/canPlace/setBoard/setPieces/restart/pause等)が残る</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>実タッチドラッグ設置が動く(回帰確認)</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>#undoBtn と #undoCount が存在</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>__game.undo() と undoLeft が公開</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>開始時 undoCount表示が3・undoLeft=3</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>開始直後はundoBtn disabled</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>横スクロールなし(390px)</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>undoBtnが画面内に見える</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>設置後 盤面に反映・undoBtn有効化</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>ボタンで取り消し: 盤面・ピース(トレイ)・スコアが元に戻る</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>取り消し後 残り2・表示2</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>取り消し直後はdisabled・undo()がfalse</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>ライン消し設置の取り消し: 消えたラインが復元</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>1ゲーム3回まで(4回目はfalse・undoLeft=0・disabled)</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>リスタートで3に戻り・disabled</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>ドラッグ設置→ボタンで取り消し</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>コンソールエラー無し</td><td class=ok>○</td><td class=ok>○</td></tr></table></details>
+<details><summary>4. 論理・算数(8問) — 採点項目の詳細</summary><table class=d><tr><th>項目</th><th>DeepSeek V4.1 Flash Free</th><th>GLM-5.3-Flash Free</th></tr><tr><td>Q1</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>Q2</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>Q3</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>Q4</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>Q5</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>Q6</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>Q7</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>Q8</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>形式:8行のみ(説明なし)</td><td class=ok>○</td><td class=ok>○</td></tr></table></details>
+<details><summary>5. 日本語の整理・要約(架空議事メモ) — 採点項目の詳細</summary><table class=d><tr><th>項目</th><th>DeepSeek V4.1 Flash Free</th><th>GLM-5.3-Flash Free</th></tr><tr><td>コードブロック・前置き無し(1行目が# )</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>タイトル20文字以内</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>見出しが指定どおり(タイトル+4つ、順序・名称一致)</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>概要:1〜2文・箇条書き無し</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>決定事項:1〜2文・箇条書き無し</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>未解決の課題:1〜2文・箇条書き無し</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>次のアクション:ちょうど5つの「- 」項目</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>次のアクション:各40文字以内</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>メモ記載の重要事実(8項目)の網羅</td><td>5/8</td><td>7/8</td></tr></table></details>
+<details><summary>6. 長文の指示遵守(12条件の物語) — 採点項目の詳細</summary><table class=d><tr><th>項目</th><th>DeepSeek V4.1 Flash Free</th><th>GLM-5.3-Flash Free</th></tr><tr><td>1.1行目が『』タイトル/『』全体で1組</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>2.タイトル次行が空行</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>12.最終行が「（了）」のみ</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>2.本文がちょうど4段落</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>3.各段落がちょうど3文(句点)</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>4.第1段落が「雨」で開始</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>5.本文400〜500字</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>6.数字(半角・全角)無し</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>7.カタカナ・長音無し</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>8.「猫」「時計」「手紙」を含む</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>9.常体(です・ます無し)</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>10.！？「」無し</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>11.最終段落の最終文に「鍵」</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>出力が物語のみ(コードブロック・前置き無し)</td><td class=ok>○</td><td class=ok>○</td></tr></table></details>
+<details><summary>7. ツール使用(CSV集計→report.md) — 採点項目の詳細</summary><table class=d><tr><th>項目</th><th>DeepSeek V4.1 Flash Free</th><th>GLM-5.3-Flash Free</th></tr><tr><td>report.md が存在</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>地域別売上(値・降順)</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>商品別売上上位3(値・降順)</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>月別売上(値・古い順)</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>除外行数が正しい</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>カンマ区切り無し</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>analyze.py が存在</td><td class=ok>○</td><td class=ok>○</td></tr><tr><td>sales.csv 未変更</td><td class=ok>○</td><td class=ok>○</td></tr></table></details>
+
+<h2>生成物の並置</h2><section><h3>1. ブラウザゲーム新規作成(ブロック崩し)</h3><div class=pair><div class=col><h4>DeepSeek V4.1 Flash Free</h4><a href='deepseek-v4.1-flash-free/t1_game/index.html'>作品を開く</a> · <a href='screens/t1_deepseek_autoplay.png'>autoplay</a> · <a href='screens/t1_deepseek_gameover.png'>gameover</a> · <a href='screens/t1_deepseek_play.png'>play</a> · <a href='screens/t1_deepseek_play2.png'>play2</a> · <a href='screens/t1_deepseek_title.png'>title</a><br><img src='screens/t1_deepseek_play2.png' loading=lazy></div><div class=col><h4>GLM-5.3-Flash Free</h4><a href='glm-5.3-flash-free/t1_game/index.html'>作品を開く</a> · <a href='screens/t1_glm_autoplay.png'>autoplay</a> · <a href='screens/t1_glm_gameover.png'>gameover</a> · <a href='screens/t1_glm_play.png'>play</a> · <a href='screens/t1_glm_play2.png'>play2</a> · <a href='screens/t1_glm_title.png'>title</a><br><img src='screens/t1_glm_play2.png' loading=lazy></div></div></section>
+<section><h3>2. バグ修正(Python、バグ3つ)</h3><div class=pair><div class=col><h4>DeepSeek V4.1 Flash Free</h4><a href='deepseek-v4.1-flash-free/t2_bugfix/utils.py'>修正後 utils.py</a> · <a href='deepseek-v4.1-flash-free/t2_bugfix/final_text.txt'>報告文</a><pre>`utils.py` を修正し、`python3 -m unittest test_utils` の全11テストが通りました。
+
+修正したバグ:
+
+1. **`moving_average`** — ループ範囲が `range(len(values) - window)` で1件足りなかったのを `range(len(values) - window + 1)` に修正。仕様どおり長さ `len(values) - window + 1` の結果を返すようにしました。
+
+2. **`add_tag`** — 引数を直接 `append` して元リストを破壊していた点と、可変デフォルト引数 `tags=[]` で呼び出し間で状態が残っていた点を修正。`item` をコピーし、`tags=None` を既定にして呼び出しごとに独立したリストを返すようにしました。
+
+3. **`parse_duration`** — 分の換算が `mi * 6` になっていたのを `mi * 60` に修正（例: `&quot;1h30m&quot;` → 5400 秒）。
+
+`test_utils.py` は変更せず、関数名・引数名も維持しています。</pre></div><div class=col><h4>GLM-5.3-Flash Free</h4><a href='glm-5.3-flash-free/t2_bugfix/utils.py'>修正後 utils.py</a> · <a href='glm-5.3-flash-free/t2_bugfix/final_text.txt'>報告文</a><pre>全 11 テストが通りました（OK）。修正内容：
+
+1. **`moving_average`**: ループ範囲が `len(values) - window` で最後の 1 ブロックが欠落 → `len(values) - window + 1` に修正。
+2. **`add_tag`**: 可変デフォルト引数 `tags=[]` で状態が残る＋引数 `item` を直接変更していた → `tags=None` にして開始時に判定、`list(item)` のコピーに `extend` する形に修正（入力を破壊しない・状態なし）。
+3. **`parse_duration`**: 分の換算が `mi * 6` になっていた（6 倍）→ 正しく `mi * 60` に修正。
+
+`percent_change` と `chunk` は仕様通りだったため変更なし。</pre></div></div></section>
+<section><h3>3. 既存コード改修(ブロックパズルにUndo追加)</h3><div class=pair><div class=col><h4>DeepSeek V4.1 Flash Free</h4><a href='deepseek-v4.1-flash-free/t3_modify/index.html'>作品を開く</a> · <a href='screens/t3_deepseek_end.png'>end</a> · <a href='screens/t3_deepseek_placed.png'>placed</a> · <a href='screens/t3_deepseek_start.png'>start</a> · <a href='screens/t3_deepseek_undone.png'>undone</a><br><img src='screens/t3_deepseek_placed.png' loading=lazy></div><div class=col><h4>GLM-5.3-Flash Free</h4><a href='glm-5.3-flash-free/t3_modify/index.html'>作品を開く</a> · <a href='screens/t3_glm_end.png'>end</a> · <a href='screens/t3_glm_placed.png'>placed</a> · <a href='screens/t3_glm_start.png'>start</a> · <a href='screens/t3_glm_undone.png'>undone</a><br><img src='screens/t3_glm_placed.png' loading=lazy></div></div></section>
+<section><h3>4. 論理・算数(8問)</h3><div class=pair><div class=col><h4>DeepSeek V4.1 Flash Free</h4><pre>Q1: 8
+Q2: 70
+Q3: 1/15
+Q4: 53
+Q5: いいえ
+Q6: 1267
+Q7: B
+Q8: 20</pre></div><div class=col><h4>GLM-5.3-Flash Free</h4><pre>Q1: 8
+Q2: 70
+Q3: 1/15
+Q4: 53
+Q5: いいえ
+Q6: 1267
+Q7: B
+Q8: 20</pre></div></div></section>
+<section><h3>5. 日本語の整理・要約(架空議事メモ)</h3><div class=pair><div class=col><h4>DeepSeek V4.1 Flash Free</h4><pre># あおば町3丁目自治会10月定例会
+
+## 概要
+10月の定例会を開催し、出席は12人だった。夏祭りの会計報告のほか、防災訓練、街灯、会費、ごみ集積所について協議した。
+
+## 決定事項
+夏祭りの会計は差額12,500円を来年度へ繰り越すこととし、防災訓練の出欠は回覧板で確認することにした。会費値上げは総会承認が必要なため今回は決定せず、来年2月の総会に議案として出すこととした。
+
+## 未解決の課題
+公園そばの街灯2基は修理を市に依頼済みだが返事がなく、修理費の市負担も確定していない。ごみ集積所のカラス対策ネットは購入か補助金申請か結論が出ず、次回へ持ち越した。
+
+## 次のアクション
+- 石井さんが今週金曜までに回覧板で防災訓練の出欠を取る
+- 高橋さんが来週月曜に市役所へ電話し街灯の修理を確認する
+- 田中さんが期限未定でごみネットの補助金条件を調べる
+- 自治会として来年2月の総会に会費値上げ案を議案提出する
+- 担当者未定でアルファ米の発注数を出欠確認後に決める</pre></div><div class=col><h4>GLM-5.3-Flash Free</h4><pre># あおば町3丁目自治会10月定例会議事録
+
+## 概要
+10月の定例会に12人が出席し、夏祭りの会計報告や防災訓練、会費値上げ案について協議した。次回の定例会は12月7日（月）夜7時に集会所で開かれる。
+
+## 決定事項
+夏祭りの収支差額12,500円を来年度へ繰り越すことが決まり、来月23日の防災訓練は第二公園に朝9時に集合し、参加者にアルファ米を配る予定となった。アルファ米の発注数は回覧板で出欠を取ってから決めること、会費値上げ案は総会の承認が必要なため来年2月の総会に議案として出すことが決まった。
+
+## 未解決の課題
+公園そばの街灯2基は市に修理を依頼済みだが返事がまだなく、修理費の市負担も確定していない。ごみ集積所のカラス対策ネットについて、新規購入か補助金申請かの結論は次回に持ち越された。
+
+## 次のアクション
+- 石井書記が今週金曜に防災訓練の回覧板を回す
+- 自治会が回覧板の結果後にアルファ米の発注数を決める（期限未定）
+- 高橋副会長が来週月曜に市役所へ街灯修理を電話確認
+- 自治会が会費値上げ案を来年2月の総会に議案として出す
+- 田中会計が補助金の条件を次回定例会までに調べる</pre></div></div></section>
+<section><h3>6. 長文の指示遵守(12条件の物語)</h3><div class=pair><div class=col><h4>DeepSeek V4.1 Flash Free</h4><pre>『雨の日の古い図書館』
+
+雨の音は図書館の古い窓を静かに叩き、私は濡れた傘を脇に置いて、長い本棚の並びをゆっくりと見上げた。この建物には幾年月を経た紙の匂いが満ちており、雨の日だけ訪れる私を優しく迎えてくれた。棚には背表紙の色あせた本が幾重にも並び、そのどれもが長い眠りについているように見えた。
+
+窓辺には灰色の猫が丸くなって眠り、時折しっぽをゆっくりと動かしていた。壁にかかった古い時計は、雨の午後を刻む低い音を部屋の隅まで静かに響かせている。その音は私の心をゆっくりと落ち着かせ、外の雨音と一つに溶け合っていった。
+
+私は棚の奥へと歩み寄り、埃をかぶった箱の隙間から一通の手紙を見つけた。それは誰かが忘れていった宛名のない便りであり、封はとうに開かれていた。便箋はすっかり黄ばんでおり、薄い文字が雨の湿気にじんわりと滲んでいた。
+
+私はその手紙を静かに読み、遠い昔に交わした約束を思い出した。雨はまだ静かに降り続いており、窓の外の景色は白く霞んでいた。私は手紙を胸に抱き、出口へと続く古い扉の鍵を静かに開けた。
+
+（了）</pre></div><div class=col><h4>GLM-5.3-Flash Free</h4><pre>『雨の日の古い図書館』
+
+雨は夜明け前から降り続いて、丘の上の古い図書館の屋根を静かに打ち続けていた。館内には埃と古紙の匂いがたちこめ、来客と呼べる者はめったに現れなかった。ただ玄関脇に置かれた大型の古時計だけが、鈍い音をたてて黙々と針を進めていた。
+
+司書を務める老人はいつも窓際の席に座り、黄ばんだ一通の手紙を読み返していた。それは四十年前、病気で死に別れた妹が末筆まで書きかけたまま残したものだという。老人は長いあいだ、その最後の行を追う勇気を出せずにいるのだった。
+
+ある日、雨宿りに飛び込んできたのは、海の色をした一匹の子猫だった。子猫は濡れた体を振って本棚の隙間を走り、やがて古時計の裏側へと滑り込んでいった。時計が止まった拍子に、背板の裂け目から一枚の古い便箋が落ちてきた。
+
+便箋には妹の名前があり、書きかけの手紙の続きが細い字で認められていた。老人はそれを妹の便箋と重ね合わせ、四十年ぶりに封筒のふたをそっと開いた。最後の一文を読み終えた老人は、涙をぬぐいながら、閉ざされたままの自分の心の鍵をようやく開けたのだった。
+
+（了）</pre></div></div></section>
+<section><h3>7. ツール使用(CSV集計→report.md)</h3><div class=pair><div class=col><h4>DeepSeek V4.1 Flash Free</h4><a href='deepseek-v4.1-flash-free/t7_tools/report.md'>report.md</a> · <a href='deepseek-v4.1-flash-free/t7_tools/analyze.py'>analyze.py</a><pre>独立した awk による再計算でも Python の結果と完全に一致しました（不正行7行・有効233行）。`sales.csv` は変更していません。
+
+`report.md` を生成しました。要点: 240行中7行（quantity空・unit_priceがN/A/abc/空・quantity 0・unit_price -300 など）を除外し、地域別は九州が331700円で首位、商品別はキャンドル(578400円)が最多、月別は4月(348000円)が最高でした。</pre></div><div class=col><h4>GLM-5.3-Flash Free</h4><a href='glm-5.3-flash-free/t7_tools/report.md'>report.md</a> · <a href='glm-5.3-flash-free/t7_tools/analyze.py'>analyze.py</a><pre>完了しました。`analyze.py` で集計し、`report.md` を作成しました（sales.csv は未変更です）。
+
+**報告:** 地域別では九州が331,700円で首位（以下北海道・中部・関西・関東と僅差の商品別売上ではキャンドル58万9,400円がトップ、月別では4月が34万8,000円で最も好調でした。数量・単価が空・非数値・0以下の不正行は7行除外しています。</pre></div></div></section>
+
+<h2>課題プロンプトと再現用ファイル</h2><details><summary>1. ブラウザゲーム新規作成(ブロック崩し) — プロンプト全文(両モデルで同一ファイル)</summary><pre>現在のディレクトリに、ブラウザで動く「ブロック崩し」ゲームを単一ファイル index.html として作ってください。外部ライブラリ・外部通信・外部画像・外部フォントは使わず、HTML/CSS/JavaScript だけで完結させてください。
+
+仕様:
+1. 画面は &lt;canvas id=&quot;game&quot;&gt; に描画する。スマホ縦画面（幅390px前後）で全体が収まり、横スクロールが出ないこと。PCでも崩れないこと。
+2. タイトル画面に &lt;button id=&quot;start-btn&quot;&gt;スタート&lt;/button&gt; を置く。押すとゲーム開始。
+3. 操作: 指のドラッグ（タッチ）またはマウスのドラッグ/移動でパドルが左右に動く。キーボードの左右キーでも動く。
+4. ブロックは5行×8列以上。行ごとに色が違い、上の行ほど高得点。ボールがブロックに当たると消えて加点し、ブロックの消える演出（粒や縮小など）を付ける。
+5. ライフは3。ボールを落とすと1減り、0でゲームオーバー。全ブロックを消すとステージクリアで、次のステージはボール速度が上がる。
+6. 画面上部に常時スコア、ライフ、ステージを表示する。ハイスコアは localStorage に保存し、タイトルとゲームオーバー画面に表示する。
+7. パドルのどこに当たったかでボールの反射角が変わること。ボールが水平に近い角度で止まらないようにすること。
+8. 一時停止ボタン（画面上のボタンとPキー）がある。ゲームオーバー後は再挑戦できる。
+9. 効果音は Web Audio API で簡単な音を鳴らす（ブロック破壊・パドル反射・ミス）。音の切り替えボタンも付ける。
+10. 自動テスト用に、グローバルに window.__game を公開し、次のプロパティを持たせる: state（&#x27;title&#x27; | &#x27;playing&#x27; | &#x27;paused&#x27; | &#x27;gameover&#x27; | &#x27;clear&#x27; のいずれか）、score（数値）、lives（数値）、stage（数値）、paddleX（パドル中心のx座標、canvas座標系）、ballX、ballY（ボール中心の座標、canvas座標系）、bricksLeft（残りブロック数）。
+
+完成したら、何を作ったかを短く日本語で説明してください。
+</pre><p><a href='prompts/t1_game.txt'>prompts/t1_game.txt</a></p></details><details><summary>2. バグ修正(Python、バグ3つ) — プロンプト全文(両モデルで同一ファイル)</summary><pre>現在のディレクトリの utils.py にはバグがあり、test_utils.py のテストが失敗します。各関数の docstring に書かれた仕様が正しい仕様です。utils.py を修正して、`python3 -m unittest test_utils` が全て通るようにしてください。
+
+制約:
+- test_utils.py は変更しないこと。
+- 関数名と引数は変えないこと。
+- 修正が終わったらテストを実行して結果を確認し、どのバグをどう直したかを短く日本語で報告すること。
+</pre><p><a href='prompts/t2_bugfix.txt'>prompts/t2_bugfix.txt</a></p></details><details><summary>3. 既存コード改修(ブロックパズルにUndo追加) — プロンプト全文(両モデルで同一ファイル)</summary><pre>現在のディレクトリにある index.html は、スマホ向けのブロックパズルゲーム（8x8盤面に3つのピースを置いてラインを消す）です。これに「やり直し（Undo）」機能を追加してください。index.html を直接編集し、他のファイルは作らないでください。
+
+仕様:
+1. 画面に &lt;button id=&quot;undoBtn&quot; type=&quot;button&quot;&gt; を追加する。ゲーム中に常に見える位置（HUDまたはピースの近く）に置き、スマホ縦画面（幅390px前後）でレイアウトが崩れたり横スクロールが出たりしないこと。ボタン内に残り回数を表示する &lt;span id=&quot;undoCount&quot;&gt; を含める（例: 「↩ 戻す (&lt;span id=&quot;undoCount&quot;&gt;3&lt;/span&gt;)」）。
+2. 直前に行ったピース設置を1手だけ取り消す。取り消すと、盤面、スコア、コンボ、トレイのピース（取り消した設置で使ったピースが元の位置に戻る）が、設置する直前の状態に完全に戻る。ラインが消えた設置を取り消した場合は、消えたラインも元に戻る。
+3. やり直せる回数は1ゲームにつき3回まで。回数が0、または取り消せる設置が無い（ゲーム開始直後や、直前に取り消した直後）の間は、ボタンを disabled にして見た目でも押せないと分かるようにする。連続で2手以上さかのぼる必要は無い（直前の1手のみ）。
+4. リスタート、リトライ、新しいゲームの開始時には回数を3に戻し、ボタンは disabled にする。ゲームオーバーになった後は取り消せなくてよい。
+5. 既存の機能（ドラッグ設置、ライン消し、コンボ、ハイスコア、ポーズ、ミュート、演出、既存の window.__game API の全メソッド/プロパティ）を壊さないこと。
+6. window.__game に、取り消しを実行するメソッド undo()（成功したら true、できなければ false を返す）と、残り回数を返すプロパティ undoLeft（数値）を追加する。ボタンを押した時と undo() を呼んだ時の動作は同じにする。
+
+完成したら、変更内容を短く日本語で説明してください。
+</pre><p><a href='prompts/t3_modify.txt'>prompts/t3_modify.txt</a></p></details><details><summary>4. 論理・算数(8問) — プロンプト全文(両モデルで同一ファイル)</summary><pre>次の8問に答えてください。各問題には正解が1つだけあります。
+
+Q1. 3で割ると2余り、5で割ると3余る正の整数のうち、最小のものはいくつですか。
+Q2. 時速60kmで2時間走り、続けて時速90kmで1時間走りました。全体の平均時速は何kmですか。
+Q3. 袋に赤玉3個、青玉5個、白玉2個が入っています。同時に2個取り出すとき、2個とも赤玉である確率を、既約分数で答えてください。
+Q4. 1から100までの整数のうち、3でも5でも割り切れない数は何個ありますか。
+Q5. 「すべてのAはBである」「あるBはCである」という2つの前提から、「あるAはCである」は必ず言えますか。「はい」か「いいえ」で答えてください。
+Q6. 2の10乗と3の5乗の和はいくつですか。
+Q7. A、B、Cの3人がいて、各自は常に本当のことを言う正直者か、常に嘘を言う嘘つきのどちらかです。Aは「Bは嘘つきだ」、Bは「Cは嘘つきだ」、Cは「AとBはどちらも嘘つきだ」と言いました。正直者は誰ですか。A、B、Cのいずれか（正直者がちょうど1人です）で答えてください。
+Q8. 3時20分のとき、時計の長針と短針がつくる角のうち、小さい方は何度ですか。
+
+回答形式: 最終回答は次の形式の8行だけで出力してください。途中の考え方や説明は書かないでください。
+Q1: &lt;答え&gt;
+Q2: &lt;答え&gt;
+...
+Q8: &lt;答え&gt;
+</pre><p><a href='prompts/t4_logic.txt'>prompts/t4_logic.txt</a></p></details><details><summary>5. 日本語の整理・要約(架空議事メモ) — プロンプト全文(両モデルで同一ファイル)</summary><pre>次は、架空の町内会「あおば町3丁目自治会」の担当者が書き散らした議事メモです。内容を整理して、指定の形式の文書にまとめてください。
+
+--- メモここから ---
+10月の定例会、出席は12人。まず夏祭りの会計報告があって、収入が総額で184,000円、支出が171,500円だったので差額の12,500円は来年度へ繰り越しになった。屋台の氷代が思ったよりかかったという話も出たけど、特に問題にはならなかった。あと、会長の森田さんから、来月23日の防災訓練について説明。集合は朝9時に第二公園で、参加者には非常食のサンプル（アルファ米）を配る予定。ただ、アルファ米の発注数がまだ決まってなくて、参加見込みが80人なのか100人なのかで意見が割れた。結局、回覧板で出欠を取ってから決めるということに。回覧板は今週金曜に回す、これは書記の石井さんの担当。
+それとは別に、街灯の件。公園そばの街灯が2基切れていて、市に修理を依頼済みだけど、返事がまだ来ていない。副会長の高橋さんが来週月曜に市役所へ電話で確認することになった。ちなみに修理費は市の負担になる見込みだが、これは確定ではない。
+会費の値上げ案も出た。月300円を350円にしたいという提案で、賛成が7、反対が3、保留が2。ただ規約上は総会での承認が必要なので、今回は決定せず、来年2月の総会に議案として出すことだけ決めた。反対意見の理由は、高齢の世帯の負担が増えるから。
+最後に、ごみ集積所のカラス対策ネットが古くなっているという指摘。新しいネットを買うか、町の補助金を申請するかで話が出たが結論は出ず、次回に持ち越し。会計の田中さんが補助金の条件を調べてくる。次回の定例会は12月7日（月）夜7時、集会所で。
+--- メモここまで ---
+
+出力形式（厳守）:
+- 出力は次の構成のMarkdown文書だけにしてください。前置き、後書き、コードブロックの囲み、説明は一切付けないでください。
+- 1行目: `# ` で始まるタイトル（20文字以内）。
+- 続けて、次の3つの見出しをこの順番で、見出し名もこの通りに書く: `## 概要`、`## 決定事項`、`## 未解決の課題`。各見出しの下には、それぞれ1〜2文（句点「。」で終わる文）の本文を書く。箇条書きは使わない。
+- 最後に `## 次のアクション` の見出しを置き、その下にちょうど5つの箇条書き（行頭が `- `）を書く。各項目は40文字以内で、「誰が・何を・いつまでに」が分かる書き方にする（期限がメモに無い場合は「期限未定」と書く）。
+- メモに書かれていない事実を付け足さないこと。
+</pre><p><a href='prompts/t5_summary.txt'>prompts/t5_summary.txt</a></p></details><details><summary>6. 長文の指示遵守(12条件の物語) — プロンプト全文(両モデルで同一ファイル)</summary><pre>「雨の日の古い図書館」を舞台にした短い物語を日本語で書いてください。次の12個の条件をすべて満たしてください。
+
+1. 1行目はタイトルとし、『』で囲む。『』は文書全体でちょうど1組だけ使う。
+2. タイトルの次の行は空行にし、その後に本文を書く。本文は、空行で区切られたちょうど4つの段落で構成する。
+3. 各段落は、句点「。」で終わる文がちょうど3つ。
+4. 第1段落は「雨」の字で書き始める。
+5. 本文（タイトルと最終行の「（了）」を除く）の文字数は、改行と空白を除いて400字以上500字以下にする。
+6. アラビア数字（0〜9、全角の数字を含む）を使わない。
+7. カタカナを一切使わない（長音記号「ー」も使わない）。
+8. 「猫」「時計」「手紙」の3語を、それぞれ本文中に1回以上含める。
+9. 常体（「だ・である」調）で書き、「です」「ます」は使わない。
+10. 感嘆符「！」と疑問符「？」を使わない。会話を表す鉤括弧「」も使わない。
+11. 最後の段落の最後の文に「鍵」の字を含める。
+12. 本文の後、最終行に「（了）」とだけ書く。
+
+出力は物語の文書だけにしてください。前置き、解説、条件の確認、コードブロックの囲みは付けないでください。
+</pre><p><a href='prompts/t6_constraints.txt'>prompts/t6_constraints.txt</a></p></details><details><summary>7. ツール使用(CSV集計→report.md) — プロンプト全文(両モデルで同一ファイル)</summary><pre>現在のディレクトリの sales.csv は、架空の雑貨店の2026年上半期の売上データです。列は date,region,product,quantity,unit_price（日付はYYYY-MM-DD、売上=quantity×unit_price、単位は円）です。このファイルを集計し、レポートを report.md に書いてください。
+
+ルール:
+- quantity または unit_price が空、数値でない、または0以下の行は不正行として集計から除外する。
+- 集計は Python かシェルで実際に計算すること（暗算や推測で数字を書かない）。使ったスクリプトは analyze.py として保存する。
+- sales.csv は変更しない。
+
+report.md の形式（厳守）:
+1. `## 地域別売上` の見出しの下に、Markdownの表（列: 地域 | 売上合計(円)）。売上合計の降順。
+2. `## 商品別売上上位3` の見出しの下に、Markdownの表（列: 商品 | 売上合計(円)）。売上合計の降順で上位3商品。
+3. `## 月別売上` の見出しの下に、Markdownの表（列: 月 | 売上合計(円)）。月は `2026-01` の形式で、古い順に並べる。
+4. `## 除外行` の見出しの下に、`除外した行数: N` の1行（Nは数字）。
+- 売上合計の数字は、桁区切りのカンマなしの整数で書く。
+
+完了したら、report.md の内容の要点を1〜2文で報告してください。
+</pre><p><a href='prompts/t7_tools.txt'>prompts/t7_tools.txt</a></p></details>
+<p>ベース: 課題3の元ファイル <a href="prompts/t3_base_block_blast_original.html">block_blast(元)</a>（DeepSeekが以前生成したもの。DeepSeek側に有利に働く可能性があります）。<br>スクリプト: <a href="runner.py">runner.py</a> / <a href="score.py">score.py</a> / <a href="browser_t1.py">browser_t1.py</a> / <a href="browser_t3.py">browser_t3.py</a></p>
+<p><a href="../">← デモ集に戻る</a></p></body></html>
